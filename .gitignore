@@ -1,0 +1,11 @@
+data
+assets
+build
+vulkan
+stb_image
+cmd.exe.lnk
+
+*.vscode
+*.suo
+*.db
+*.ipch
