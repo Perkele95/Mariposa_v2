@@ -19,6 +19,5 @@ Typically I employ a simple strategy to programming:
  1. solve the problem
  2. reduce/compress/optimise
  3. abstract
- I like this style personally, as refactoring code is easier when there are fewer layers of abstraction in the way.
-
  
+I like this style personally, as refactoring code is easier when there are fewer layers of abstraction in the way.

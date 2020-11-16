@@ -1,6 +1,7 @@
 #include "Win32_Mariposa.h"
 #include "..\Vulkan\Include\vulkan\vulkan_win32.h"
 
+static WINDOWPLACEMENT gWindowPlacement = { sizeof(WINDOWPLACEMENT) };
 static mpWindowData *gWin32WindowData = nullptr;
 static HINSTANCE gHInstance = 0;
 static HWND gWindow = 0;
@@ -132,6 +133,35 @@ void Win32CreateWindow(mpWindowData *windowData, mpCallbacks* callbacks)
     callbacks->mpWriteFile = Win32WriteFile;
 }
 
+static void Win32ToggleFullScreen()
+{
+    // Thanks to Raymond Chan we can do this:
+    // https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+    DWORD style = GetWindowLong(gWindow, GWL_STYLE);
+    if (style & WS_OVERLAPPEDWINDOW)
+    {
+        HMONITOR monitor = MonitorFromWindow(gWindow, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO mi = { sizeof(mi) };
+        if (GetWindowPlacement(gWindow, &gWindowPlacement) && GetMonitorInfoA(monitor, &mi))
+        {
+            SetWindowLong(gWindow, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+            SetWindowPos(gWindow, HWND_TOP,
+                        mi.rcMonitor.left, mi.rcMonitor.top,
+                        mi.rcMonitor.right - mi.rcMonitor.left,
+                        mi.rcMonitor.bottom - mi.rcMonitor.top,
+                        SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+    }
+    else
+    {
+        SetWindowLong(gWindow, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+        SetWindowPlacement(gWindow, &gWindowPlacement);
+        SetWindowPos(gWindow, NULL, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+}
+
 static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpKeyState state, bool32 altKeyDown)
 {
     switch (keyCode) {
@@ -160,32 +190,35 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpKey
         DispatchKeyEvent(pReceiver, MP_KEY_DOWN, state);
         break;
     case VK_LEFT:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_LEFT, state);
         break;
     case VK_RIGHT:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_RIGHT, state);
         break;
     case VK_SPACE:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_SPACE, state);
         break;
     case VK_ESCAPE:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_ESCAPE, state);
         break;
     case VK_CONTROL:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_CONTROL, state);
         break;
     case VK_SHIFT:
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        DispatchKeyEvent(pReceiver, MP_KEY_SHIFT, state);
         break;
     default: break;
     }
-    if(keyCode == VK_F4 && altKeyDown)
+    if(altKeyDown && (state == MP_KEY_PRESS))
     {
-        gWin32WindowData->running = false;
-    }
-    else if(keyCode == VK_RETURN && altKeyDown)
-    {
-        //Win32ToggleFullScreen(message.hwnd);
+        if(keyCode == VK_F4)
+        {
+            gWin32WindowData->running = false;
+        }
+        else if(keyCode == VK_RETURN)
+        {
+            Win32ToggleFullScreen();
+        }
     }
 }
 

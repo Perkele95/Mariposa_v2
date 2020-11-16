@@ -400,6 +400,18 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemory *memory, uint32_
 
 static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t height)
 {
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
+    
+    vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
+    if(renderer->swapDetails.formatCount > 0)
+        vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
+    
+    vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
+    if(renderer->swapDetails.presentModeCount > 0)
+        vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
+    
+    mp_assert((renderer->swapDetails.formatCount > 0) && (renderer->swapDetails.presentModeCount > 0))
+    
     VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(renderer->swapDetails.pFormats, renderer->swapDetails.formatCount);
     VkPresentModeKHR presentMode = ChooseSwapPresentMode(renderer->swapDetails.pPresentModes, renderer->swapDetails.presentModeCount);
     VkExtent2D extent = ChooseSwapExtent(renderer->swapDetails.capabilities, width, height);
