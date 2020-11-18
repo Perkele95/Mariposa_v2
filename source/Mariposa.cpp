@@ -119,10 +119,13 @@ int main(int argc, char *argv[])
     int64_t lastCounter = 0, perfCountFrequency = 0;
     Win32PrepareClock(&lastCounter, &perfCountFrequency);
     
-    mpCamera mainCamera = {};
-    mainCamera.position = {2.0f, 2.0f, 2.0f};
-    mainCamera.fov = PI32 / 3.0f;
-    mainCamera.rotationSpeed = 2.0f;
+    mpCamera mCam = {};
+    mCam.fov = PI32 / 3.0f;
+    mCam.translationSpeed = 2.0f;
+    mCam.rotationSpeed = 2.0f;
+    mCam.model = Mat4x4Identity();
+    mCam.view = LookAt({2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
+    mCam.projection = Perspective(mCam.fov, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), 0.1f, 20.0f);
     
     mpCameraControls cameraControls = {};
     
@@ -139,50 +142,64 @@ int main(int argc, char *argv[])
     {
         Win32PollEvents(&eventReceiver);
         if(eventReceiver.keyPressedEvents & MP_KEY_W)
-            cameraControls.up = true;
+            cameraControls.rUp = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_W)
-            cameraControls.up = false;
+            cameraControls.rUp = false;
         
         if(eventReceiver.keyPressedEvents & MP_KEY_S)
-            cameraControls.down = true;
+            cameraControls.rDown = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_S)
-            cameraControls.down = false;
+            cameraControls.rDown = false;
         
         if(eventReceiver.keyPressedEvents & MP_KEY_A)
-            cameraControls.left = true;
+            cameraControls.rLeft = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_A)
-            cameraControls.left = false;
+            cameraControls.rLeft = false;
         
         if(eventReceiver.keyPressedEvents & MP_KEY_D)
-            cameraControls.right = true;
+            cameraControls.rRight = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_D)
-            cameraControls.right = false;
-            
+            cameraControls.rRight = false;
+        
         if(eventReceiver.keyPressedEvents & MP_KEY_UP)
-            cameraControls.forward = true;
+            cameraControls.tForward = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_UP)
-            cameraControls.forward = false;
-            
+            cameraControls.tForward = false;
+        
         if(eventReceiver.keyPressedEvents & MP_KEY_DOWN)
-            cameraControls.backward = true;
+            cameraControls.tBackward = true;
         else if(eventReceiver.keyReleasedEvents & MP_KEY_DOWN)
-            cameraControls.backward = false;
+            cameraControls.tBackward = false;
         
-        if(cameraControls.up)
-            mainCamera.rotation.Y += timestep * mainCamera.rotationSpeed;
-        else if(cameraControls.down)
-            mainCamera.rotation.Y -= timestep * mainCamera.rotationSpeed;
-        if(cameraControls.left)
-            mainCamera.rotation.X += timestep * mainCamera.rotationSpeed;
-        else if(cameraControls.right)
-            mainCamera.rotation.X -= timestep * mainCamera.rotationSpeed;
+        if(eventReceiver.keyPressedEvents & MP_KEY_LEFT)
+            cameraControls.tLeft = true;
+        else if(eventReceiver.keyReleasedEvents & MP_KEY_LEFT)
+            cameraControls.tLeft = false;
         
-        if(cameraControls.forward)
-            mainCamera.position.X += timestep * mainCamera.rotationSpeed;
-        if(cameraControls.backward)
-            mainCamera.position.X -= timestep * mainCamera.rotationSpeed;
+        if(eventReceiver.keyPressedEvents & MP_KEY_RIGHT)
+            cameraControls.tRight = true;
+        else if(eventReceiver.keyReleasedEvents & MP_KEY_RIGHT)
+            cameraControls.tRight = false;
         
-        mpVulkanUpdate(&renderer, &voxelData, &mainCamera, &windowData);
+        if(cameraControls.tForward)
+            mCam.view = mCam.view * Mat4Translate({0.0f, 0.0f, mCam.translationSpeed * timestep});
+        else if(cameraControls.tBackward)
+            mCam.view = mCam.view * Mat4Translate({0.0f, 0.0f, -mCam.translationSpeed * timestep});
+        if(cameraControls.tLeft)
+            mCam.view = mCam.view * Mat4Translate({mCam.translationSpeed * timestep, 0.0f, 0.0f});
+        else if(cameraControls.tRight)
+            mCam.view = mCam.view * Mat4Translate({-mCam.translationSpeed * timestep, 0.0f, 0.0f});
+        
+        if(cameraControls.rUp)
+            mCam.view = mCam.view * Mat4RotateX(mCam.rotationSpeed * timestep);
+        else if(cameraControls.rDown)
+            mCam.view = mCam.view * Mat4RotateX(-mCam.rotationSpeed * timestep);
+        if(cameraControls.rLeft)
+            mCam.view = mCam.view * Mat4RotateY(mCam.rotationSpeed * timestep);
+        else if(cameraControls.rRight)
+            mCam.view = mCam.view * Mat4RotateY(-mCam.rotationSpeed * timestep);
+        
+        mpVulkanUpdate(&renderer, &voxelData, &mCam, &windowData);
         
         windowData.hasResized = false;
         ResetEventReceiver(&eventReceiver);

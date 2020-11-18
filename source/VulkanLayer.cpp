@@ -1024,10 +1024,6 @@ void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowD
     PrepareVkGeometryBuffers(renderer, voxelData);
     PrepareVkCommandbuffers(renderer, voxelData);
     PrepareVkSyncObjects(renderer);
-    
-    renderer->ubo.Model = Mat4x4Identity();
-    renderer->ubo.View = LookAt({2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
-    renderer->ubo.Proj = Perspective(PI32 / 3.0f, (float)renderer->swapChainExtent.width / (float)renderer->swapChainExtent.height, 0.1f, 10.0f);
 }
 
 static void CleanupSwapChain(mpVkRenderer *renderer)
@@ -1069,8 +1065,9 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpVoxelData *const v
 
 static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uint32_t imageIndex)
 {
-    renderer->ubo.View = LookAt(camera->position, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}) * Mat4RotateX(camera->rotation.Y) * Mat4RotateY(camera->rotation.X);
-    renderer->ubo.Proj = Perspective(PI32 / 3.0f, (float)renderer->swapChainExtent.width / (float)renderer->swapChainExtent.height, 0.1f, 20.0f);
+    renderer->ubo.Model = camera->model;
+    renderer->ubo.View = camera->view;
+    renderer->ubo.Proj = camera->projection;
     
     void* data;
     VkDeviceSize dataSize = sizeof(renderer->ubo);

@@ -31,7 +31,7 @@ static void _ProfilerPushBackResult(char* ID, uint64_t cycleCount)
 }
 #endif
 
-void PrintProfilerResults()
+void PrintProfileResults()
 {
 #ifdef PROFILER_ENABLE
     OutputDebugStringA("Profiler:\n");

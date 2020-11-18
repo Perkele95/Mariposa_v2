@@ -88,21 +88,26 @@ struct mpVoxelData
     uint16_t *indices;
     
     uint64_t voxelCount;
-    float voxelScale;
+    uint32_t voxelsPerBatch;
+    uint32_t batchCount;
     uint32_t gridXWidth;
+    float voxelScale;
 };
 
 struct mpCamera
 {
-    vec3 position;
-    vec3 rotation;
+    mat4x4 model;
+    mat4x4 view;
+    mat4x4 projection;
+    
     float fov;
+    float translationSpeed;
     float rotationSpeed;
 };
 
 struct mpCameraControls
-{
-    bool32 up, down, left, right, forward, backward;
+{   // R = rotation, T = translation
+    bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
 };
 
 inline static void* PushBackPermanentStorage(mpMemory* memory, size_t pushSize)

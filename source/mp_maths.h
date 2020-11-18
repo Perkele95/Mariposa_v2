@@ -63,6 +63,28 @@ inline vec3 operator+(vec3 a, vec3 b)
     return result;
 }
 
+inline vec3 operator+(float b, vec3 a)
+{
+    vec3 result;
+    
+    result.X = a.X + b;
+    result.Y = a.Y + b;
+    result.Z = a.Z + b;
+    
+    return result;
+}
+
+inline vec3 operator+(vec3 a, float b)
+{
+    vec3 result;
+    
+    result.X = a.X + b;
+    result.Y = a.Y + b;
+    result.Z = a.Z + b;
+    
+    return result;
+}
+
 inline vec3& operator+=(vec3 &a, vec3 b)
 {
     a = a + b;
@@ -77,6 +99,28 @@ inline vec3 operator-(vec3 a, vec3 b)
     result.X = a.X - b.X;
     result.Y = a.Y - b.Y;
     result.Z = a.Z - b.Z;
+    
+    return result;
+}
+
+inline vec3 operator-(vec3 a, float b)
+{
+    vec3 result;
+    
+    result.X = a.X - b;
+    result.Y = a.Y - b;
+    result.Z = a.Z - b;
+    
+    return result;
+}
+
+inline vec3 operator-(float b, vec3 a)
+{
+    vec3 result;
+    
+    result.X = a.X - b;
+    result.Y = a.Y - b;
+    result.Z = a.Z - b;
     
     return result;
 }
@@ -183,10 +227,10 @@ inline mat4x4 operator*(mat4x4 a, mat4x4 b)
 inline mat4x4 Mat4Translate(vec3 t)
 {
     mat4x4 result = {
-        1.0f, 0.0f, 0.0f, t.X,
-        0.0f, 1.0f, 0.0f, t.Y,
-        0.0f, 0.0f, 1.0f, t.Z,
-        0.0f, 0.0f, 0.0f, 1.0f
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        t.X, t.Y, t.Z, 1.0f
     };
     return result;
 }
