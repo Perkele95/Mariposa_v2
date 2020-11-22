@@ -105,19 +105,24 @@ static void UpdateCamera(const mpEventReceiver *const receiver, mpCamera *const 
     else if(cameraControls->rRight)
         camera->yaw -= camera->sensitivity * timestep;
     
+    if(camera->pitch > camera->pitchClamp)
+        camera->pitch = camera->pitchClamp;
+    else if(camera->pitch < -camera->pitchClamp)
+        camera->pitch = -camera->pitchClamp;
+    
     // TODO: clamp pitch
     vec3 front = {cosf(camera->pitch) * cosf(camera->yaw), cosf(camera->pitch) * sinf(camera->yaw), sinf(camera->pitch)};
-    printf("pitch: %f, yaw: %f, front.Z: %f\n", camera->pitch, camera->yaw, front.Z);
+    vec3 left = {sinf(camera->yaw), -cosf(camera->yaw), 0.0f};
     if(cameraControls->tForward)
         camera->position += front * camera->speed * timestep;
     else if(cameraControls->tBackward)
         camera->position -= front * camera->speed * timestep;
     if(cameraControls->tLeft)
-        camera->position += front * camera->speed * timestep;
+        camera->position -= left * camera->speed * timestep;
     else if(cameraControls->tRight)
-        camera->position -= front * camera->speed * timestep;
+        camera->position += left * camera->speed * timestep;
     
-    camera->view = LookAt(camera->position, camera->position + front, {0.0f, 0.0f, 1.0f});// * Mat4RotateY(camera->yaw) * Mat4RotateX(camera->pitch);
+    camera->view = LookAt(camera->position, camera->position + front, {0.0f, 0.0f, 1.0f});
     camera->projection = Perspective(camera->fov, aspectRatio, 0.1f, 20.0f);
 }
 
@@ -169,6 +174,7 @@ int main(int argc, char *argv[])
     camera.fov = PI32 / 3.0f;
     camera.model = Mat4x4Identity();
     camera.position = {2.0f, 2.0f, 2.0f};
+    camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
     
     mpCameraControls cameraControls = {};
     

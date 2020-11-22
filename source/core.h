@@ -98,7 +98,7 @@ struct mpCamera
 {
     mat4x4 model, view, projection;
     vec3 position;
-    float pitch, yaw, fov, speed, sensitivity;
+    float pitch, yaw, pitchClamp, fov, speed, sensitivity;
 };
 
 struct mpCameraControls
