@@ -305,7 +305,7 @@ VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresentModes, 
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, uint32_t windowWidth, uint32_t windowHeight)
+VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windowWidth, int32_t windowHeight)
 {
     if(capabilities.currentExtent.width != 0xFFFFFFFF)
     {
@@ -313,7 +313,7 @@ VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, uint32_t wind
     }
     else
     {
-        VkExtent2D actualExtent = { windowWidth, windowHeight };
+        VkExtent2D actualExtent = { static_cast<uint32_t>(windowWidth), static_cast<uint32_t>(windowHeight) };
         
         actualExtent.width = Uint32Clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         actualExtent.height = Uint32Clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -322,7 +322,7 @@ VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, uint32_t wind
     }
 }
 
-static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemory *memory, uint32_t width, uint32_t height)
+static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemory *memory, int32_t width, int32_t height)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
     
@@ -1000,25 +1000,25 @@ static bool32 CheckValidationLayerSupport(mpMemory *memory)
 void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpVoxelData *const voxelData, const mpCallbacks *const callbacks)
 {
     (*pRenderer) = PushBackPermanentStorage(memory, sizeof(mpVkRenderer));
-    mpVkRenderer *renderer = (mpVkRenderer*)(*pRenderer);
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
     
     bool32 enableValidation = true;
     if(enableValidation && !CheckValidationLayerSupport(memory))
         printf("WARNING: Validation layers requested, but not available\n");
     
     PrepareVkRenderer(renderer, enableValidation, callbacks);
-    PrepareVkSwapChain(renderer, memory, (uint32_t)windowData->width, (uint32_t)windowData->height);
+    PrepareVkSwapChain(renderer, memory, windowData->width, windowData->height);
     
     PrepareVkRenderPass(renderer);
     PrepareShaderModules(renderer, callbacks);
     PrepareVkPipeline(renderer);
     
-    renderer->pFramebuffers =          (VkFramebuffer*)   PushBackPermanentStorage(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount);
-    renderer->pUniformbuffers =        (VkBuffer*)        PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderer->swapChainImageCount);
-    renderer->pUniformbufferMemories = (VkDeviceMemory*)  PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount);
-    renderer->pCommandbuffers =        (VkCommandBuffer*) PushBackPermanentStorage(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount);
-    renderer->pInFlightImageFences =   (VkFence*)         PushBackPermanentStorage(memory, sizeof(VkFence) * renderer->swapChainImageCount);
-    renderer->pDescriptorSets =        (VkDescriptorSet*) PushBackPermanentStorage(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount);
+    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  PushBackPermanentStorage(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(PushBackPermanentStorage(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   static_cast<VkFence*>(        PushBackPermanentStorage(memory, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(PushBackPermanentStorage(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
     
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, voxelData);
@@ -1078,7 +1078,7 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
 
 void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, const mpCamera *const camera, const mpWindowData *const windowData)
 {
-    mpVkRenderer *renderer = (mpVkRenderer*)(*pRenderer);
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
     
     if(windowData->width == 0 || windowData->height == 0)
         return;
@@ -1144,7 +1144,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, c
 
 void mpVulkanCleanup(mpRenderer *pRenderer)
 {
-    mpVkRenderer *renderer = (mpVkRenderer*)(*pRenderer);
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
     
     CleanupSwapChain(renderer);
     

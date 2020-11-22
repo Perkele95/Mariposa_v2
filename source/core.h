@@ -96,13 +96,9 @@ struct mpVoxelData
 
 struct mpCamera
 {
-    mat4x4 model;
-    mat4x4 view;
-    mat4x4 projection;
-    
-    float fov;
-    float translationSpeed;
-    float rotationSpeed;
+    mat4x4 model, view, projection;
+    vec3 position;
+    float pitch, yaw, fov, speed, sensitivity;
 };
 
 struct mpCameraControls
@@ -113,13 +109,13 @@ struct mpCameraControls
 inline static void* PushBackPermanentStorage(mpMemory* memory, size_t pushSize)
 {
     void* result = memory->PermanentStorage;
-    memory->PermanentStorage = (uint8_t*) memory->PermanentStorage + pushSize;
+    memory->PermanentStorage = static_cast<uint8_t*>(memory->PermanentStorage) + pushSize;
     return result;
 }
 
 inline static void* PushBackTransientStorage(mpMemory* memory, size_t pushSize)
 {
     void* result = memory->TransientStorage;
-    memory->TransientStorage = (uint8_t*) memory->TransientStorage + pushSize;
+    memory->TransientStorage = static_cast<uint8_t*>(memory->TransientStorage) + pushSize;
     return result;
 }

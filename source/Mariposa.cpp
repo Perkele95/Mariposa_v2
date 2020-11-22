@@ -10,8 +10,8 @@ static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
     mp_assert(voxelData->voxelScale > 0.0f);
     // Voxels points to the structure containing info about vertices and indices for each voxel.
     // All voxeldata is allcated on the heap, through PermanentStorage
-    voxelData->vertices = (mpVertex*) PushBackPermanentStorage(memory, sizeof(mpVertex) * 24 *  voxelData->voxelCount);
-    voxelData->indices = (uint16_t*) PushBackPermanentStorage(memory, sizeof(uint16_t) * 36 * voxelData->voxelCount);
+    voxelData->vertices = static_cast<mpVertex*>(PushBackPermanentStorage(memory, sizeof(mpVertex) * 24 *  voxelData->voxelCount));
+    voxelData->indices = static_cast<uint16_t*>(PushBackPermanentStorage(memory, sizeof(uint16_t) * 36 * voxelData->voxelCount));
     
     vec3 vertex_0 = {-voxelData->voxelScale, -voxelData->voxelScale,  voxelData->voxelScale};
     vec3 vertex_1 = { voxelData->voxelScale, -voxelData->voxelScale,  voxelData->voxelScale};
@@ -30,8 +30,8 @@ static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
             gridY++;
             gridX = 0;
         }
-        float xPos = 2.0f * voxelData->voxelScale * (float)gridX;
-        float yPos = 2.0f * voxelData->voxelScale * (float)gridY;
+        float xPos = 2.0f * voxelData->voxelScale * static_cast<float>(gridX);
+        float yPos = 2.0f * voxelData->voxelScale * static_cast<float>(gridY);
         float heightMap = Perlin(xPos, yPos);
         vec3 offset = {xPos, yPos, (heightMap)};
         float colourMap = 0.5f + (0.5f * heightMap);
@@ -64,8 +64,8 @@ static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
         
         for(uint16_t row = 0; row < 6; row++)
         {
-            uint16_t rowOffset = row * 6 + 36 * (uint16_t)i;
-            uint16_t indexOffset = 4 * row + 24 * (uint16_t)i;
+            uint16_t rowOffset = row * 6 + 36 * static_cast<uint16_t>(i);
+            uint16_t indexOffset = 4 * row + 24 * static_cast<uint16_t>(i);
             voxelData->indices[rowOffset]     = 0 + indexOffset;
             voxelData->indices[rowOffset + 1] = 1 + indexOffset;
             voxelData->indices[rowOffset + 2] = 2 + indexOffset;
@@ -77,7 +77,51 @@ static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
     }
 }
 
-static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
+inline static void ProcessKeyToCameraControl(const mpEventReceiver *const receiver, mpKeyEvent key, bool32 *controlValue)
+{
+    if(receiver->keyPressedEvents & key)
+        (*controlValue) = true;
+    else if(receiver->keyReleasedEvents & key)
+        (*controlValue) = false;
+}
+
+static void UpdateCamera(const mpEventReceiver *const receiver, mpCamera *const camera, mpCameraControls *const cameraControls, float aspectRatio, float timestep)
+{
+    ProcessKeyToCameraControl(receiver, MP_KEY_W, &cameraControls->rUp);
+    ProcessKeyToCameraControl(receiver, MP_KEY_S, &cameraControls->rDown);
+    ProcessKeyToCameraControl(receiver, MP_KEY_A, &cameraControls->rLeft);
+    ProcessKeyToCameraControl(receiver, MP_KEY_D, &cameraControls->rRight);
+    ProcessKeyToCameraControl(receiver, MP_KEY_UP, &cameraControls->tForward);
+    ProcessKeyToCameraControl(receiver, MP_KEY_DOWN, &cameraControls->tBackward);
+    ProcessKeyToCameraControl(receiver, MP_KEY_LEFT, &cameraControls->tLeft);
+    ProcessKeyToCameraControl(receiver, MP_KEY_RIGHT, &cameraControls->tRight);
+    
+    if(cameraControls->rUp)
+        camera->pitch += camera->sensitivity * timestep;
+    else if(cameraControls->rDown)
+        camera->pitch -= camera->sensitivity * timestep;
+    if(cameraControls->rLeft)
+        camera->yaw += camera->sensitivity * timestep;
+    else if(cameraControls->rRight)
+        camera->yaw -= camera->sensitivity * timestep;
+    
+    // TODO: clamp pitch
+    vec3 front = {cosf(camera->pitch) * cosf(camera->yaw), cosf(camera->pitch) * sinf(camera->yaw), sinf(camera->pitch)};
+    printf("pitch: %f, yaw: %f, front.Z: %f\n", camera->pitch, camera->yaw, front.Z);
+    if(cameraControls->tForward)
+        camera->position += front * camera->speed * timestep;
+    else if(cameraControls->tBackward)
+        camera->position -= front * camera->speed * timestep;
+    if(cameraControls->tLeft)
+        camera->position += front * camera->speed * timestep;
+    else if(cameraControls->tRight)
+        camera->position -= front * camera->speed * timestep;
+    
+    camera->view = LookAt(camera->position, camera->position + front, {0.0f, 0.0f, 1.0f});// * Mat4RotateY(camera->yaw) * Mat4RotateX(camera->pitch);
+    camera->projection = Perspective(camera->fov, aspectRatio, 0.1f, 20.0f);
+}
+
+inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
 {
     if(sampler->count < sampler->level)
     {
@@ -86,8 +130,8 @@ static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
     }
     else
     {
-        float sampledFps = (float)sampler->level / (sampler->value);
-        printf("Sampled fps: %f\n", sampledFps);
+        float sampledFps = static_cast<float>(sampler->level) / sampler->value;
+        //printf("Sampled fps: %f\n", sampledFps);
         sampler->count = 0;
         sampler->value = 0;
     }
@@ -107,7 +151,7 @@ int main(int argc, char *argv[])
     memory.CombinedStorage = malloc(totalSize);
     memset(memory.CombinedStorage, 0, totalSize);
     memory.PermanentStorage = memory.CombinedStorage;
-    memory.TransientStorage = (uint8_t*)memory.CombinedStorage + memory.PermanentStorageSize;
+    memory.TransientStorage = static_cast<uint8_t*>(memory.CombinedStorage) + memory.PermanentStorageSize;
     
     mpVoxelData voxelData = {};
     voxelData.voxelCount = 1000;
@@ -119,13 +163,12 @@ int main(int argc, char *argv[])
     int64_t lastCounter = 0, perfCountFrequency = 0;
     Win32PrepareClock(&lastCounter, &perfCountFrequency);
     
-    mpCamera mCam = {};
-    mCam.fov = PI32 / 3.0f;
-    mCam.translationSpeed = 2.0f;
-    mCam.rotationSpeed = 2.0f;
-    mCam.model = Mat4x4Identity();
-    mCam.view = LookAt({2.0f, 2.0f, 2.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
-    mCam.projection = Perspective(mCam.fov, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), 0.1f, 20.0f);
+    mpCamera camera = {};
+    camera.speed = 2.0f;
+    camera.sensitivity = 2.0f;
+    camera.fov = PI32 / 3.0f;
+    camera.model = Mat4x4Identity();
+    camera.position = {2.0f, 2.0f, 2.0f};
     
     mpCameraControls cameraControls = {};
     
@@ -141,65 +184,10 @@ int main(int argc, char *argv[])
     while(windowData.running)
     {
         Win32PollEvents(&eventReceiver);
-        if(eventReceiver.keyPressedEvents & MP_KEY_W)
-            cameraControls.rUp = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_W)
-            cameraControls.rUp = false;
         
-        if(eventReceiver.keyPressedEvents & MP_KEY_S)
-            cameraControls.rDown = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_S)
-            cameraControls.rDown = false;
+        UpdateCamera(&eventReceiver, &camera, &cameraControls, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), timestep);
         
-        if(eventReceiver.keyPressedEvents & MP_KEY_A)
-            cameraControls.rLeft = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_A)
-            cameraControls.rLeft = false;
-        
-        if(eventReceiver.keyPressedEvents & MP_KEY_D)
-            cameraControls.rRight = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_D)
-            cameraControls.rRight = false;
-        
-        if(eventReceiver.keyPressedEvents & MP_KEY_UP)
-            cameraControls.tForward = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_UP)
-            cameraControls.tForward = false;
-        
-        if(eventReceiver.keyPressedEvents & MP_KEY_DOWN)
-            cameraControls.tBackward = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_DOWN)
-            cameraControls.tBackward = false;
-        
-        if(eventReceiver.keyPressedEvents & MP_KEY_LEFT)
-            cameraControls.tLeft = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_LEFT)
-            cameraControls.tLeft = false;
-        
-        if(eventReceiver.keyPressedEvents & MP_KEY_RIGHT)
-            cameraControls.tRight = true;
-        else if(eventReceiver.keyReleasedEvents & MP_KEY_RIGHT)
-            cameraControls.tRight = false;
-        
-        if(cameraControls.tForward)
-            mCam.view = mCam.view * Mat4Translate({0.0f, 0.0f, mCam.translationSpeed * timestep});
-        else if(cameraControls.tBackward)
-            mCam.view = mCam.view * Mat4Translate({0.0f, 0.0f, -mCam.translationSpeed * timestep});
-        if(cameraControls.tLeft)
-            mCam.view = mCam.view * Mat4Translate({mCam.translationSpeed * timestep, 0.0f, 0.0f});
-        else if(cameraControls.tRight)
-            mCam.view = mCam.view * Mat4Translate({-mCam.translationSpeed * timestep, 0.0f, 0.0f});
-        
-        if(cameraControls.rUp)
-            mCam.view = mCam.view * Mat4RotateX(mCam.rotationSpeed * timestep);
-        else if(cameraControls.rDown)
-            mCam.view = mCam.view * Mat4RotateX(-mCam.rotationSpeed * timestep);
-        if(cameraControls.rLeft)
-            mCam.view = mCam.view * Mat4RotateY(mCam.rotationSpeed * timestep);
-        else if(cameraControls.rRight)
-            mCam.view = mCam.view * Mat4RotateY(-mCam.rotationSpeed * timestep);
-        
-        mpVulkanUpdate(&renderer, &voxelData, &mCam, &windowData);
+        mpVulkanUpdate(&renderer, &voxelData, &camera, &windowData);
         
         windowData.hasResized = false;
         ResetEventReceiver(&eventReceiver);

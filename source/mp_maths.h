@@ -132,7 +132,7 @@ inline vec3& operator-=(vec3 &a, vec3 b)
     return a;
 }
 
-inline vec3 Normalisevec3(vec3 vec)
+inline vec3 normalise(vec3 vec)
 {
     float length = sqrtf(vec.X * vec.X + vec.Y * vec.Y + vec.Z * vec.Z);
     vec3 result;
@@ -285,13 +285,13 @@ inline mat4x4 LookAt(vec3 eye, vec3 center, vec3 up)
     vec3 X, Y, Z;
     
     Z = eye - center;
-    Z = Normalisevec3(Z);
+    Z = normalise(Z);
     Y = up;
     X = vec3Cross(Y, Z);
     Y = vec3Cross(Z, X);
     
-    X = Normalisevec3(X);
-    Y = Normalisevec3(Y);
+    X = normalise(X);
+    Y = normalise(Y);
     
     mat4x4 result;
     
