@@ -809,46 +809,49 @@ static void EndSingleTimeCommands(mpVkRenderer *renderer, VkCommandBuffer comman
     vkFreeCommandBuffers(renderer->device, renderer->commandPool, 1, &commandBuffer);
 }
 
-static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelData *const data)
+static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelData *const voxelData)
 {
-    VkDeviceSize vertbufferSize = sizeof(mpVertex) * 24 * data->voxelCount;
-    VkDeviceSize indexbufferSize = sizeof(uint16_t) * 36 * data->voxelCount;
+    VkDeviceSize vertbufferSize = sizeof(mpVertex) * 24 * voxelData->voxelsPerBatch;
+    VkDeviceSize indexbufferSize = sizeof(uint16_t) * 36 * voxelData->voxelsPerBatch;
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkBuffer vertStagingbuffer, indexStagingbuffer;
-    VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
-    void *vertData;
-    void *indexData;
     VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     
-    CreateBuffer(renderer, vertbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &vertStagingbuffer, &vertStagingbufferMemory);
-    CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
-    vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
-    vkMapMemory(renderer->device, indexStagingbufferMemory, 0, indexbufferSize, 0, &indexData);
-    memcpy(vertData, data->vertices, (size_t)vertbufferSize);
-    memcpy(indexData, data->indices, (size_t)indexbufferSize);
-    vkUnmapMemory(renderer->device, vertStagingbufferMemory);
-    vkUnmapMemory(renderer->device, indexStagingbufferMemory);
-    
-    CreateBuffer(renderer, vertbufferSize, vertUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->vertexbuffer, &renderer->vertexbufferMemory);
-    CreateBuffer(renderer, indexbufferSize, indexUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->indexbuffer, &renderer->indexbufferMemory);
-    
-    VkCommandBuffer cmdBuffer = BeginSingleTimeCommands(renderer);
-    VkBufferCopy copyRegion = {};
-    copyRegion.size = vertbufferSize;
-    vkCmdCopyBuffer(cmdBuffer, vertStagingbuffer, renderer->vertexbuffer, 1, &copyRegion);
-    EndSingleTimeCommands(renderer, cmdBuffer);
-    
-    cmdBuffer = BeginSingleTimeCommands(renderer);
-    copyRegion = {};
-    copyRegion.size = indexbufferSize;
-    vkCmdCopyBuffer(cmdBuffer, indexStagingbuffer, renderer->indexbuffer, 1, &copyRegion);
-    EndSingleTimeCommands(renderer, cmdBuffer);
-    
-    vkDestroyBuffer(renderer->device, vertStagingbuffer, nullptr);
-    vkDestroyBuffer(renderer->device, indexStagingbuffer, nullptr);
-    vkFreeMemory(renderer->device, vertStagingbufferMemory, nullptr);
-    vkFreeMemory(renderer->device, indexStagingbufferMemory, nullptr);
+    for(uint32_t i = 0; i < voxelData->batchCount; i++)
+    {
+        VkBuffer vertStagingbuffer, indexStagingbuffer;
+        VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
+        void *vertData, *indexData;
+        
+        CreateBuffer(renderer, vertbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &vertStagingbuffer, &vertStagingbufferMemory);
+        CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
+        vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
+        vkMapMemory(renderer->device, indexStagingbufferMemory, 0, indexbufferSize, 0, &indexData);
+        memcpy(vertData, voxelData->pBatches[i].vertices, (size_t)vertbufferSize);
+        memcpy(indexData, voxelData->pBatches[i].indices, (size_t)indexbufferSize);
+        vkUnmapMemory(renderer->device, vertStagingbufferMemory);
+        vkUnmapMemory(renderer->device, indexStagingbufferMemory);
+        
+        CreateBuffer(renderer, vertbufferSize, vertUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->vertexbuffers[i], &renderer->vertexbufferMemories[i]);
+        CreateBuffer(renderer, indexbufferSize, indexUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->indexbuffers[i], &renderer->indexbufferMemories[i]);
+        
+        VkCommandBuffer cmdBuffer = BeginSingleTimeCommands(renderer);
+        VkBufferCopy copyRegion = {};
+        copyRegion.size = vertbufferSize;
+        vkCmdCopyBuffer(cmdBuffer, vertStagingbuffer, renderer->vertexbuffers[i], 1, &copyRegion);
+        EndSingleTimeCommands(renderer, cmdBuffer);
+        
+        cmdBuffer = BeginSingleTimeCommands(renderer);
+        copyRegion = {};
+        copyRegion.size = indexbufferSize;
+        vkCmdCopyBuffer(cmdBuffer, indexStagingbuffer, renderer->indexbuffers[i], 1, &copyRegion);
+        EndSingleTimeCommands(renderer, cmdBuffer);
+        
+        vkDestroyBuffer(renderer->device, vertStagingbuffer, nullptr);
+        vkDestroyBuffer(renderer->device, indexStagingbuffer, nullptr);
+        vkFreeMemory(renderer->device, vertStagingbufferMemory, nullptr);
+        vkFreeMemory(renderer->device, indexStagingbufferMemory, nullptr);
+    }
 }
 
 static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpVoxelData *const voxelData)
@@ -942,10 +945,14 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpVoxelData *c
         
         VkDeviceSize offsets[] = { 0 };
         
-        vkCmdBindVertexBuffers(renderer->pCommandbuffers[i], 0, 1, &renderer->vertexbuffer, offsets);
-        vkCmdBindIndexBuffer(renderer->pCommandbuffers[i], renderer->indexbuffer, 0, VK_INDEX_TYPE_UINT16);
         vkCmdBindDescriptorSets(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipelineLayout, 0, 1, &renderer->pDescriptorSets[i], 0, nullptr);
-        vkCmdDrawIndexed(renderer->pCommandbuffers[i], 36 * (uint32_t)voxelData->voxelCount, 1, 0, 0, 0);
+        
+        for(uint32_t k = 0; k < voxelData->batchCount; k++)
+        {
+            vkCmdBindVertexBuffers(renderer->pCommandbuffers[i], 0, 1, &renderer->vertexbuffers[k], offsets);
+            vkCmdBindIndexBuffer(renderer->pCommandbuffers[i], renderer->indexbuffers[k], 0, VK_INDEX_TYPE_UINT16);
+            vkCmdDrawIndexed(renderer->pCommandbuffers[i], 36 * voxelData->voxelsPerBatch, 1, 0, 0, 0);
+        }
         
         vkCmdEndRenderPass(renderer->pCommandbuffers[i]);
         
@@ -1019,6 +1026,10 @@ void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowD
     renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(PushBackPermanentStorage(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
     renderer->pInFlightImageFences =   static_cast<VkFence*>(        PushBackPermanentStorage(memory, sizeof(VkFence) * renderer->swapChainImageCount));
     renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(PushBackPermanentStorage(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->vertexbuffers =          static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * voxelData->batchCount));
+    renderer->indexbuffers =           static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * voxelData->batchCount));
+    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * voxelData->batchCount));
+    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * voxelData->batchCount));
     
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, voxelData);
@@ -1142,7 +1153,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, c
     renderer->currentFrame = (renderer->currentFrame + 1) % MP_MAX_IMAGES_IN_FLIGHT;
 }
 
-void mpVulkanCleanup(mpRenderer *pRenderer)
+void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount)
 {
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
     
@@ -1152,10 +1163,13 @@ void mpVulkanCleanup(mpRenderer *pRenderer)
     vkDestroyShaderModule(renderer->device, renderer->fragShaderModule, nullptr);
     vkDestroyDescriptorSetLayout(renderer->device, renderer->descriptorSetLayout, nullptr);
     
-    vkDestroyBuffer(renderer->device, renderer->indexbuffer, nullptr);
-    vkFreeMemory(renderer->device, renderer->indexbufferMemory, nullptr);
-    vkDestroyBuffer(renderer->device, renderer->vertexbuffer, nullptr);
-    vkFreeMemory(renderer->device, renderer->vertexbufferMemory, nullptr);
+    for(uint32_t i = 0; i < batchCount; i++)
+    {
+        vkDestroyBuffer(renderer->device, renderer->indexbuffers[i], nullptr);
+        vkFreeMemory(renderer->device, renderer->indexbufferMemories[i], nullptr);
+        vkDestroyBuffer(renderer->device, renderer->vertexbuffers[i], nullptr);
+        vkFreeMemory(renderer->device, renderer->vertexbufferMemories[i], nullptr);
+    }
     
     for(uint32_t i = 0; i < MP_MAX_IMAGES_IN_FLIGHT; i++)
     {

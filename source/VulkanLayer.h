@@ -8,7 +8,7 @@
 
 void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpVoxelData *const voxelData, const mpCallbacks *const callbacks);
 void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, const mpCamera *const camera, const mpWindowData *const windowData);
-void mpVulkanCleanup(mpRenderer *pRenderer);
+void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount);
 
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
 
@@ -74,10 +74,10 @@ struct mpVkRenderer
     VkCommandPool commandPool;
     VkCommandBuffer *pCommandbuffers;
     
-    VkBuffer vertexbuffer;
-    VkDeviceMemory vertexbufferMemory;
-    VkBuffer indexbuffer;
-    VkDeviceMemory indexbufferMemory;
+    VkBuffer *vertexbuffers;
+    VkDeviceMemory *vertexbufferMemories;
+    VkBuffer *indexbuffers;
+    VkDeviceMemory *indexbufferMemories;
     VkBuffer *pUniformbuffers;
     VkDeviceMemory *pUniformbufferMemories;
     

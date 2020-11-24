@@ -5,76 +5,91 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// Amount = amount of cubes/voxels. Scale = half of width/height.
+static mpBatch CreateBatch(mpMemory *memory, float scale, vec2 bottomLeft, vec2 topRight)
+{
+    mpBatch batch = {};
+    const vec2 localArea = {topRight.X - bottomLeft.X, topRight.Y - bottomLeft.Y};
+    const uint32_t batchSize = static_cast<uint32_t>(localArea.X * localArea.Y);
+    batch.vertices = static_cast<mpVertex*>(PushBackPermanentStorage(memory, sizeof(mpVertex) * 24 *  batchSize));
+    batch.indices = static_cast<uint16_t*>(PushBackPermanentStorage(memory, sizeof(uint16_t) * 36 * batchSize));
+    
+    const vec3 voxVerts[8] = {
+        {-scale, -scale,  scale},
+        { scale, -scale,  scale},
+        { scale,  scale,  scale},
+        {-scale,  scale,  scale},
+        {-scale,  scale, -scale},
+        { scale,  scale, -scale},
+        { scale, -scale, -scale},
+        {-scale, -scale, -scale},
+    };
+    // TODO: Create vertex list
+    
+    for(float y = 0; y < localArea.Y; y++)
+    {
+        for(float x = 0; x < localArea.X; x++)
+        {
+            uint32_t i = static_cast<uint32_t>(x + (localArea.X * y));
+            uint32_t iOffset = i * 24;
+            
+            vec2 position = {2.0f * scale * x, 2.0f * scale * y};
+            float heightMap = Perlin(position.X, position.Y);
+            vec3 voxelPos = {position.X, position.Y, (heightMap)};
+            
+            float colourMap = 0.5f + (0.5f * heightMap);
+            vec3 colour = {0.0f, colourMap, 0.2f};
+            
+            batch.vertices[0 + iOffset]  = {voxVerts[0] + voxelPos, colour}; // TOP
+            batch.vertices[1 + iOffset]  = {voxVerts[1] + voxelPos, colour};
+            batch.vertices[2 + iOffset]  = {voxVerts[2] + voxelPos, colour};
+            batch.vertices[3 + iOffset]  = {voxVerts[3] + voxelPos, colour};
+            batch.vertices[4 + iOffset]  = {voxVerts[4] + voxelPos, colour}; // BOTTOM
+            batch.vertices[5 + iOffset]  = {voxVerts[5] + voxelPos, colour};
+            batch.vertices[6 + iOffset]  = {voxVerts[6] + voxelPos, colour};
+            batch.vertices[7 + iOffset]  = {voxVerts[7] + voxelPos, colour};
+            batch.vertices[8 + iOffset]  = {voxVerts[1] + voxelPos, colour}; // NORTH
+            batch.vertices[9 + iOffset]  = {voxVerts[6] + voxelPos, colour};
+            batch.vertices[10 + iOffset] = {voxVerts[5] + voxelPos, colour};
+            batch.vertices[11 + iOffset] = {voxVerts[2] + voxelPos, colour};
+            batch.vertices[12 + iOffset] = {voxVerts[3] + voxelPos, colour}; // SOUTH
+            batch.vertices[13 + iOffset] = {voxVerts[4] + voxelPos, colour};
+            batch.vertices[14 + iOffset] = {voxVerts[7] + voxelPos, colour};
+            batch.vertices[15 + iOffset] = {voxVerts[0] + voxelPos, colour};
+            batch.vertices[16 + iOffset] = {voxVerts[2] + voxelPos, colour}; // EAST
+            batch.vertices[17 + iOffset] = {voxVerts[5] + voxelPos, colour};
+            batch.vertices[18 + iOffset] = {voxVerts[4] + voxelPos, colour};
+            batch.vertices[19 + iOffset] = {voxVerts[3] + voxelPos, colour};
+            batch.vertices[20 + iOffset] = {voxVerts[0] + voxelPos, colour}; // WEST
+            batch.vertices[21 + iOffset] = {voxVerts[7] + voxelPos, colour};
+            batch.vertices[22 + iOffset] = {voxVerts[6] + voxelPos, colour};
+            batch.vertices[23 + iOffset] = {voxVerts[1] + voxelPos, colour};
+            
+            for(uint16_t row = 0; row < 6; row++)
+            {
+                uint16_t rowOffset = row * 6 + 36 * static_cast<uint16_t>(i);
+                uint16_t indexOffset = 4 * row + 24 * static_cast<uint16_t>(i);
+                batch.indices[rowOffset]     = 0 + indexOffset;
+                batch.indices[rowOffset + 1] = 1 + indexOffset;
+                batch.indices[rowOffset + 2] = 2 + indexOffset;
+                batch.indices[rowOffset + 3] = 2 + indexOffset;
+                batch.indices[rowOffset + 4] = 3 + indexOffset;
+                batch.indices[rowOffset + 5] = 0 + indexOffset;
+            }
+        }
+    }
+    return batch;
+}
+
 static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
 {
-    mp_assert(voxelData->voxelScale > 0.0f);
-    // Voxels points to the structure containing info about vertices and indices for each voxel.
-    // All voxeldata is allcated on the heap, through PermanentStorage
-    voxelData->vertices = static_cast<mpVertex*>(PushBackPermanentStorage(memory, sizeof(mpVertex) * 24 *  voxelData->voxelCount));
-    voxelData->indices = static_cast<uint16_t*>(PushBackPermanentStorage(memory, sizeof(uint16_t) * 36 * voxelData->voxelCount));
+    voxelData->pBatches = static_cast<mpBatch*>(PushBackPermanentStorage(memory, sizeof(mpBatch) * voxelData->batchCount));
     
-    vec3 vertex_0 = {-voxelData->voxelScale, -voxelData->voxelScale,  voxelData->voxelScale};
-    vec3 vertex_1 = { voxelData->voxelScale, -voxelData->voxelScale,  voxelData->voxelScale};
-    vec3 vertex_2 = { voxelData->voxelScale,  voxelData->voxelScale,  voxelData->voxelScale};
-    vec3 vertex_3 = {-voxelData->voxelScale,  voxelData->voxelScale,  voxelData->voxelScale};
-    vec3 vertex_4 = {-voxelData->voxelScale,  voxelData->voxelScale, -voxelData->voxelScale};
-    vec3 vertex_5 = { voxelData->voxelScale,  voxelData->voxelScale, -voxelData->voxelScale};
-    vec3 vertex_6 = { voxelData->voxelScale, -voxelData->voxelScale, -voxelData->voxelScale};
-    vec3 vertex_7 = {-voxelData->voxelScale, -voxelData->voxelScale, -voxelData->voxelScale};
+    vec2 area = {30.0f, 30.0f};
+    voxelData->voxelsPerBatch = static_cast<uint32_t>(area.X * area.Y);
     
-    uint32_t gridX = 0, gridY = 0;
-    for(uint32_t i = 0; i < voxelData->voxelCount; i++)
-    {
-        if(gridX == voxelData->gridXWidth)
-        {
-            gridY++;
-            gridX = 0;
-        }
-        float xPos = 2.0f * voxelData->voxelScale * static_cast<float>(gridX);
-        float yPos = 2.0f * voxelData->voxelScale * static_cast<float>(gridY);
-        float heightMap = Perlin(xPos, yPos);
-        vec3 offset = {xPos, yPos, (heightMap)};
-        float colourMap = 0.5f + (0.5f * heightMap);
-        vec3 colour = {0.0f, colourMap, colourMap};
-        
-        voxelData->vertices[0 + i * 24]  = {vertex_0 + offset, colour}; // TOP
-        voxelData->vertices[1 + i * 24]  = {vertex_1 + offset, colour};
-        voxelData->vertices[2 + i * 24]  = {vertex_2 + offset, colour};
-        voxelData->vertices[3 + i * 24]  = {vertex_3 + offset, colour};
-        voxelData->vertices[4 + i * 24]  = {vertex_4 + offset, colour}; // BOTTOM
-        voxelData->vertices[5 + i * 24]  = {vertex_5 + offset, colour};
-        voxelData->vertices[6 + i * 24]  = {vertex_6 + offset, colour};
-        voxelData->vertices[7 + i * 24]  = {vertex_7 + offset, colour};
-        voxelData->vertices[8 + i * 24]  = {vertex_1 + offset, colour}; // NORTH
-        voxelData->vertices[9 + i * 24]  = {vertex_6 + offset, colour};
-        voxelData->vertices[10 + i * 24] = {vertex_5 + offset, colour};
-        voxelData->vertices[11 + i * 24] = {vertex_2 + offset, colour};
-        voxelData->vertices[12 + i * 24] = {vertex_3 + offset, colour}; // SOUTH
-        voxelData->vertices[13 + i * 24] = {vertex_4 + offset, colour};
-        voxelData->vertices[14 + i * 24] = {vertex_7 + offset, colour};
-        voxelData->vertices[15 + i * 24] = {vertex_0 + offset, colour};
-        voxelData->vertices[16 + i * 24] = {vertex_2 + offset, colour}; // EAST
-        voxelData->vertices[17 + i * 24] = {vertex_5 + offset, colour};
-        voxelData->vertices[18 + i * 24] = {vertex_4 + offset, colour};
-        voxelData->vertices[19 + i * 24] = {vertex_3 + offset, colour};
-        voxelData->vertices[20 + i * 24] = {vertex_0 + offset, colour}; // WEST
-        voxelData->vertices[21 + i * 24] = {vertex_7 + offset, colour};
-        voxelData->vertices[22 + i * 24] = {vertex_6 + offset, colour};
-        voxelData->vertices[23 + i * 24] = {vertex_1 + offset, colour};
-        
-        for(uint16_t row = 0; row < 6; row++)
-        {
-            uint16_t rowOffset = row * 6 + 36 * static_cast<uint16_t>(i);
-            uint16_t indexOffset = 4 * row + 24 * static_cast<uint16_t>(i);
-            voxelData->indices[rowOffset]     = 0 + indexOffset;
-            voxelData->indices[rowOffset + 1] = 1 + indexOffset;
-            voxelData->indices[rowOffset + 2] = 2 + indexOffset;
-            voxelData->indices[rowOffset + 3] = 2 + indexOffset;
-            voxelData->indices[rowOffset + 4] = 3 + indexOffset;
-            voxelData->indices[rowOffset + 5] = 0 + indexOffset;
-        }
-        gridX++;
-    }
+    for(uint32_t batchIndex = 0; batchIndex < voxelData->batchCount; batchIndex++)
+        voxelData->pBatches[batchIndex] = CreateBatch(memory, voxelData->voxelScale, {0.0f, 0.0f}, area);
 }
 
 inline static void ProcessKeyToCameraControl(const mpEventReceiver *const receiver, mpKeyEvent key, bool32 *controlValue)
@@ -146,7 +161,7 @@ int main(int argc, char *argv[])
 {
     mpCallbacks callbacks = {};
     mpWindowData windowData = {};
-    Win32CreateWindow(&windowData, &callbacks);
+    Win32CreateWindow(&windowData, &callbacks); // TODO: Change Win32CreateWindow() to CreateWindow()
     // TODO: Prepare win32 sound
     
     mpMemory memory = {};
@@ -159,14 +174,10 @@ int main(int argc, char *argv[])
     memory.TransientStorage = static_cast<uint8_t*>(memory.CombinedStorage) + memory.PermanentStorageSize;
     
     mpVoxelData voxelData = {};
-    voxelData.voxelCount = 1000;
     voxelData.gridXWidth = 50;
     voxelData.voxelScale = 0.2f;
+    voxelData.batchCount = 1;
     PrepareRenderData(&memory, &voxelData);
-    
-    float timestep = 0.0f;
-    int64_t lastCounter = 0, perfCountFrequency = 0;
-    Win32PrepareClock(&lastCounter, &perfCountFrequency);
     
     mpCamera camera = {};
     camera.speed = 2.0f;
@@ -176,14 +187,16 @@ int main(int argc, char *argv[])
     camera.position = {2.0f, 2.0f, 2.0f};
     camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
     
-    mpCameraControls cameraControls = {};
-    
     mpRenderer renderer = nullptr;
     mpVulkanInit(&renderer, &memory, &windowData, &voxelData, &callbacks);
     
     mpEventReceiver eventReceiver = {};
-    
+    mpCameraControls cameraControls = {};
     mpFPSsampler fpsSampler = {1000,0,0};
+    
+    float timestep = 0.0f;
+    int64_t lastCounter = 0, perfCountFrequency = 0;
+    Win32PrepareClock(&lastCounter, &perfCountFrequency);
     
     windowData.running = true;
     windowData.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
@@ -201,7 +214,7 @@ int main(int argc, char *argv[])
         UpdateFpsSampler(&fpsSampler, timestep);
     }
     
-    mpVulkanCleanup(&renderer);
+    mpVulkanCleanup(&renderer, voxelData.batchCount);
     
     return 0;
 }

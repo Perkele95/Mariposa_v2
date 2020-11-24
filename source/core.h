@@ -82,14 +82,18 @@ struct mpVertex
     vec3 colour;
 };
 
-struct mpVoxelData
+struct mpBatch
 {
     mpVertex *vertices;
     uint16_t *indices;
-    
-    uint64_t voxelCount;
-    uint32_t voxelsPerBatch;
+};
+
+struct mpVoxelData
+{
+    mpBatch *pBatches;
     uint32_t batchCount;
+    uint32_t voxelsPerBatch;
+    
     uint32_t gridXWidth;
     float voxelScale;
 };
