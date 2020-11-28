@@ -107,7 +107,7 @@ bool32 Win32WriteFile(const char *filename, mpFile *file)
     return result;
 }
 
-void Win32CreateWindow(mpWindowData *windowData, mpCallbacks* callbacks)
+void PlatformCreateWindow(mpWindowData *windowData)
 {
     gWin32WindowData = &(*windowData);
     gHInstance = GetModuleHandleA(0);
@@ -127,10 +127,16 @@ void Win32CreateWindow(mpWindowData *windowData, mpCallbacks* callbacks)
                                 CW_USEDEFAULT, CW_USEDEFAULT,
                                 NULL, NULL, gHInstance, NULL);
     }
-    callbacks->GetSurface = CreateWin32Surface;
-    callbacks->mpCloseFile = Win32CloseFile;
-    callbacks->mpReadFile = Win32ReadFile;
-    callbacks->mpWriteFile = Win32WriteFile;
+}
+
+mpCallbacks PlatformGetCallbacks()
+{
+    mpCallbacks callbacks = {};
+    callbacks.GetSurface = CreateWin32Surface;
+    callbacks.mpCloseFile = Win32CloseFile;
+    callbacks.mpReadFile = Win32ReadFile;
+    callbacks.mpWriteFile = Win32WriteFile;
+    return callbacks;
 }
 
 static void Win32ToggleFullScreen()
@@ -222,7 +228,7 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpKey
     }
 }
 
-void Win32PollEvents(mpEventReceiver *pReceiver)
+void PlatformPollEvents(mpEventReceiver *pReceiver)
 {
     MSG message;
     while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE))
@@ -286,7 +292,7 @@ void Win32PollEvents(mpEventReceiver *pReceiver)
     }
 }
 
-void Win32PrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency)
+void PlatformPrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency)
 {
     LARGE_INTEGER lastCounter_Large = {}, perfCountFrequencyResult = {};
     QueryPerformanceFrequency(&perfCountFrequencyResult);
@@ -295,7 +301,7 @@ void Win32PrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency)
     *lastCounter = lastCounter_Large.QuadPart;
 }
 
-float Win32UpdateClock(int64_t *lastCounter, int64_t perfCountFrequency)
+float PlatformUpdateClock(int64_t *lastCounter, int64_t perfCountFrequency)
 {
     LARGE_INTEGER endCounter = {};
     QueryPerformanceCounter(&endCounter);

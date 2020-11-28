@@ -82,20 +82,45 @@ struct mpVertex
     vec3 colour;
 };
 
-struct mpBatch
+struct mpMesh
 {
     mpVertex *vertices;
     uint16_t *indices;
+    size_t verticesSize;
+    size_t indicesSize;
+    uint32_t indexCount;
 };
 
-struct mpVoxelData
+struct mpRenderData
 {
-    mpBatch *pBatches;
-    uint32_t batchCount;
-    uint32_t voxelsPerBatch;
-    
-    uint32_t gridXWidth;
-    float voxelScale;
+    mpMesh *meshes;
+    uint32_t meshCount;
+};
+
+enum mpVoxelType
+{
+    Voxel_Type_Empty,
+    Voxel_Type_Grass,
+    Voxel_Type_Dirt,
+    Voxel_Type_Stone,
+};
+
+struct mpVoxelBlock
+{
+    mpVoxelType type;
+    bool32 isActive;
+};
+
+struct mpVoxelChunk
+{
+    mpVoxelBlock ***pBlocks;
+    uint32_t size;
+};
+
+struct mpWorldData
+{
+    mpVoxelChunk *chunks;
+    uint32_t chunkCount;
 };
 
 struct mpCamera
@@ -104,9 +129,9 @@ struct mpCamera
     vec3 position;
     float pitch, yaw, pitchClamp, fov, speed, sensitivity;
 };
-
+// R = rotation, T = translation
 struct mpCameraControls
-{   // R = rotation, T = translation
+{
     bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
 };
 

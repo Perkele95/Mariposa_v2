@@ -809,16 +809,17 @@ static void EndSingleTimeCommands(mpVkRenderer *renderer, VkCommandBuffer comman
     vkFreeCommandBuffers(renderer->device, renderer->commandPool, 1, &commandBuffer);
 }
 
-static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelData *const voxelData)
+static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData *renderData)
 {
-    VkDeviceSize vertbufferSize = sizeof(mpVertex) * 24 * voxelData->voxelsPerBatch;
-    VkDeviceSize indexbufferSize = sizeof(uint16_t) * 36 * voxelData->voxelsPerBatch;
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     
-    for(uint32_t i = 0; i < voxelData->batchCount; i++)
+    for(uint32_t i = 0; i < renderData->meshCount; i++)
     {
+        // TODO: the size and data* already exists inside the meshes, use those instead
+        VkDeviceSize vertbufferSize = renderData->meshes[i].verticesSize;
+        VkDeviceSize indexbufferSize = renderData->meshes[i].indicesSize;
         VkBuffer vertStagingbuffer, indexStagingbuffer;
         VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
         void *vertData, *indexData;
@@ -827,8 +828,8 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelData *
         CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
         vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
         vkMapMemory(renderer->device, indexStagingbufferMemory, 0, indexbufferSize, 0, &indexData);
-        memcpy(vertData, voxelData->pBatches[i].vertices, (size_t)vertbufferSize);
-        memcpy(indexData, voxelData->pBatches[i].indices, (size_t)indexbufferSize);
+        memcpy(vertData, renderData->meshes[i].vertices, static_cast<size_t>(vertbufferSize));
+        memcpy(indexData, renderData->meshes[i].indices, static_cast<size_t>(indexbufferSize));
         vkUnmapMemory(renderer->device, vertStagingbufferMemory);
         vkUnmapMemory(renderer->device, indexStagingbufferMemory);
         
@@ -854,7 +855,7 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelData *
     }
 }
 
-static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpVoxelData *const voxelData)
+static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *renderData)
 {
     // Prepare uniform buffers
     VkDeviceSize bufferSize = sizeof(UniformbufferObject);
@@ -947,11 +948,11 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpVoxelData *c
         
         vkCmdBindDescriptorSets(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipelineLayout, 0, 1, &renderer->pDescriptorSets[i], 0, nullptr);
         
-        for(uint32_t k = 0; k < voxelData->batchCount; k++)
+        for(uint32_t k = 0; k < renderData->meshCount; k++)
         {
             vkCmdBindVertexBuffers(renderer->pCommandbuffers[i], 0, 1, &renderer->vertexbuffers[k], offsets);
             vkCmdBindIndexBuffer(renderer->pCommandbuffers[i], renderer->indexbuffers[k], 0, VK_INDEX_TYPE_UINT16);
-            vkCmdDrawIndexed(renderer->pCommandbuffers[i], 36 * voxelData->voxelsPerBatch, 1, 0, 0, 0);
+            vkCmdDrawIndexed(renderer->pCommandbuffers[i], renderData->meshes[k].indexCount, 1, 0, 0, 0);
         }
         
         vkCmdEndRenderPass(renderer->pCommandbuffers[i]);
@@ -1004,7 +1005,7 @@ static bool32 CheckValidationLayerSupport(mpMemory *memory)
     return layerFound;
 }
 
-void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpVoxelData *const voxelData, const mpCallbacks *const callbacks)
+void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks)
 {
     (*pRenderer) = PushBackPermanentStorage(memory, sizeof(mpVkRenderer));
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
@@ -1026,14 +1027,14 @@ void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowD
     renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(PushBackPermanentStorage(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
     renderer->pInFlightImageFences =   static_cast<VkFence*>(        PushBackPermanentStorage(memory, sizeof(VkFence) * renderer->swapChainImageCount));
     renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(PushBackPermanentStorage(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * voxelData->batchCount));
-    renderer->indexbuffers =           static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * voxelData->batchCount));
-    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * voxelData->batchCount));
-    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * voxelData->batchCount));
+    renderer->vertexbuffers =          static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderData->meshCount));
+    renderer->indexbuffers =           static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderData->meshCount));
+    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
+    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
     
     PrepareVkFrameBuffers(renderer);
-    PrepareVkGeometryBuffers(renderer, voxelData);
-    PrepareVkCommandbuffers(renderer, voxelData);
+    PrepareVkGeometryBuffers(renderer, renderData);
+    PrepareVkCommandbuffers(renderer, renderData);
     PrepareVkSyncObjects(renderer);
 }
 
@@ -1062,7 +1063,7 @@ static void CleanupSwapChain(mpVkRenderer *renderer)
     vkDestroyDescriptorPool(renderer->device, renderer->descriptorPool, nullptr);
 }
 
-static void RecreateSwapChain(mpVkRenderer *renderer, const mpVoxelData *const voxelData, uint32_t width, uint32_t height)
+static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *renderData, uint32_t width, uint32_t height)
 {
     vkDeviceWaitIdle(renderer->device);
     CleanupSwapChain(renderer);
@@ -1071,7 +1072,7 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpVoxelData *const v
     PrepareVkRenderPass(renderer);
     PrepareVkPipeline(renderer);
     PrepareVkFrameBuffers(renderer);
-    PrepareVkCommandbuffers(renderer, voxelData);
+    PrepareVkCommandbuffers(renderer, renderData);
 }
 
 static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uint32_t imageIndex)
@@ -1087,7 +1088,7 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
     vkUnmapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex]);
 }
 
-void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, const mpCamera *const camera, const mpWindowData *const windowData)
+void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const mpCamera *const camera, const mpWindowData *const windowData)
 {
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
     
@@ -1100,7 +1101,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, c
     VkResult imageResult = vkAcquireNextImageKHR(renderer->device, renderer->swapChain, UINT64MAX, renderer->imageAvailableSemaphores[renderer->currentFrame], VK_NULL_HANDLE, &imageIndex);
     if(imageResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        RecreateSwapChain(renderer, voxelData, windowData->width, windowData->height);
+        RecreateSwapChain(renderer, renderData, windowData->width, windowData->height);
         return;
     }
     else if(imageResult != VK_SUCCESS && imageResult != VK_SUBOPTIMAL_KHR)
@@ -1146,7 +1147,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, c
     
     VkResult presentResult = vkQueuePresentKHR(renderer->presentQueue, &presentInfo);
     if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || windowData->hasResized)
-        RecreateSwapChain(renderer, voxelData, windowData->width, windowData->height);
+        RecreateSwapChain(renderer, renderData, windowData->width, windowData->height);
     else if(presentResult != VK_SUCCESS)
         printf("Failed to present swap chain image!\n");
     

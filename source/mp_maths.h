@@ -379,3 +379,13 @@ inline float Perlin(float x, float y)
     float result = _lerp(ix0, ix1, sy);
     return result;
 }
+
+inline float Perlin(float x, float y, uint32_t step)
+{
+    float result = Perlin(x, y);
+    uint32_t intVal = static_cast<uint32_t>(result);
+    intVal /= step;
+    result = static_cast<float>(intVal);
+    
+    return result;
+}

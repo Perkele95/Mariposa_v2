@@ -1,98 +1,223 @@
+#include "core.h"
 #include "Win32_Mariposa.h"
 #include "VulkanLayer.h"
 #include "events.h"
 
 #include <stdlib.h>
 #include <stdio.h>
+// TODO: Unglobal these
+#define MP_CHUNK_SIZE 16
+#define MP_VOXEL_SCALE 0.5f
 
-// Amount = amount of cubes/voxels. Scale = half of width/height.
-static mpBatch CreateBatch(mpMemory *memory, float scale, vec2 bottomLeft, vec2 topRight)
+// TODO: Unglobal these
+// Full cube vertex positions
+const vec3 voxVerts[8] = {
+    {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
+    { MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
+    { MP_VOXEL_SCALE,  MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
+    {-MP_VOXEL_SCALE,  MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
+    {-MP_VOXEL_SCALE,  MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
+    { MP_VOXEL_SCALE,  MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
+    { MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
+    {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
+};
+const vec3 _mpVoxelFaceTop[]    = {voxVerts[0], voxVerts[1], voxVerts[2], voxVerts[3]};
+const vec3 _mpVoxelFaceBottom[] = {voxVerts[4], voxVerts[5], voxVerts[6], voxVerts[7]};
+const vec3 _mpVoxelFaceNorth[]  = {voxVerts[1], voxVerts[6], voxVerts[5], voxVerts[2]};
+const vec3 _mpVoxelFaceSouth[]  = {voxVerts[3], voxVerts[4], voxVerts[7], voxVerts[0]};
+const vec3 _mpVoxelFaceEast[]   = {voxVerts[2], voxVerts[5], voxVerts[4], voxVerts[3]};
+const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVerts[1]};
+
+const uint16_t _mpVoxelIndexStride = 6;
+const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
+
+static mpVoxelChunk mpCreateVoxelChunk()
 {
-    mpBatch batch = {};
-    const vec2 localArea = {topRight.X - bottomLeft.X, topRight.Y - bottomLeft.Y};
-    const uint32_t batchSize = static_cast<uint32_t>(localArea.X * localArea.Y);
-    batch.vertices = static_cast<mpVertex*>(PushBackPermanentStorage(memory, sizeof(mpVertex) * 24 *  batchSize));
-    batch.indices = static_cast<uint16_t*>(PushBackPermanentStorage(memory, sizeof(uint16_t) * 36 * batchSize));
+    mpVoxelChunk chunk = {};
+    chunk.size = MP_CHUNK_SIZE;
+    chunk.pBlocks = static_cast<mpVoxelBlock***>(malloc(sizeof(mpVoxelBlock**) * MP_CHUNK_SIZE));
+    *chunk.pBlocks = static_cast<mpVoxelBlock**>(malloc(sizeof(mpVoxelBlock*) * MP_CHUNK_SIZE * MP_CHUNK_SIZE));
+    **chunk.pBlocks = static_cast<mpVoxelBlock*>(malloc(sizeof(mpVoxelBlock) * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE));
+    // Pointer to pointer assignment
+    for(uint32_t i = 1; i < MP_CHUNK_SIZE; i++)
+        chunk.pBlocks[i] = &chunk.pBlocks[0][i * MP_CHUNK_SIZE];
+    // Pointer assignment
+    for(uint32_t i = 0; i < MP_CHUNK_SIZE; i++)
+        for(uint32_t k = 0; k < MP_CHUNK_SIZE; k++)
+            chunk.pBlocks[i][k] = &chunk.pBlocks[0][i][k * MP_CHUNK_SIZE];
+    // Zero out each chunk so all chunks are empty and not active by default
+    memset(&(***chunk.pBlocks), 0, sizeof(mpVoxelBlock) * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE);
     
-    const vec3 voxVerts[8] = {
-        {-scale, -scale,  scale},
-        { scale, -scale,  scale},
-        { scale,  scale,  scale},
-        {-scale,  scale,  scale},
-        {-scale,  scale, -scale},
-        { scale,  scale, -scale},
-        { scale, -scale, -scale},
-        {-scale, -scale, -scale},
-    };
-    // TODO: Create vertex list
+    return chunk;
+}
+
+inline static void mpDestroyVoxelChunk(mpVoxelChunk chunk)
+{
+    free(**chunk.pBlocks);
+    free(*chunk.pBlocks);
+    free(chunk.pBlocks);
+}
+
+// TODO: Function needs to be cleaned up after verification
+static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
+{
+    vec3 colour = {0.0f, 1.0f, 0.3f};
+    uint16_t vertexCount = 0, indexCount = 0;
+    // TODO: The sizes down below could be premultiplied
+    const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
+    mpVertex *tempBlockVertices = static_cast<mpVertex*>(malloc(tempVertBlockSize));
+    memset(tempBlockVertices, 0, tempVertBlockSize);
+    mpVertex *tempBlockVertIncrementer = tempBlockVertices;
     
-    for(float y = 0; y < localArea.Y; y++)
-    {
-        for(float x = 0; x < localArea.X; x++)
-        {
-            uint32_t i = static_cast<uint32_t>(x + (localArea.X * y));
-            uint32_t iOffset = i * 24;
-            
-            vec2 position = {2.0f * scale * x, 2.0f * scale * y};
-            float heightMap = Perlin(position.X, position.Y);
-            vec3 voxelPos = {position.X, position.Y, (heightMap)};
-            
-            float colourMap = 0.5f + (0.5f * heightMap);
-            vec3 colour = {0.0f, colourMap, 0.2f};
-            
-            batch.vertices[0 + iOffset]  = {voxVerts[0] + voxelPos, colour}; // TOP
-            batch.vertices[1 + iOffset]  = {voxVerts[1] + voxelPos, colour};
-            batch.vertices[2 + iOffset]  = {voxVerts[2] + voxelPos, colour};
-            batch.vertices[3 + iOffset]  = {voxVerts[3] + voxelPos, colour};
-            batch.vertices[4 + iOffset]  = {voxVerts[4] + voxelPos, colour}; // BOTTOM
-            batch.vertices[5 + iOffset]  = {voxVerts[5] + voxelPos, colour};
-            batch.vertices[6 + iOffset]  = {voxVerts[6] + voxelPos, colour};
-            batch.vertices[7 + iOffset]  = {voxVerts[7] + voxelPos, colour};
-            batch.vertices[8 + iOffset]  = {voxVerts[1] + voxelPos, colour}; // NORTH
-            batch.vertices[9 + iOffset]  = {voxVerts[6] + voxelPos, colour};
-            batch.vertices[10 + iOffset] = {voxVerts[5] + voxelPos, colour};
-            batch.vertices[11 + iOffset] = {voxVerts[2] + voxelPos, colour};
-            batch.vertices[12 + iOffset] = {voxVerts[3] + voxelPos, colour}; // SOUTH
-            batch.vertices[13 + iOffset] = {voxVerts[4] + voxelPos, colour};
-            batch.vertices[14 + iOffset] = {voxVerts[7] + voxelPos, colour};
-            batch.vertices[15 + iOffset] = {voxVerts[0] + voxelPos, colour};
-            batch.vertices[16 + iOffset] = {voxVerts[2] + voxelPos, colour}; // EAST
-            batch.vertices[17 + iOffset] = {voxVerts[5] + voxelPos, colour};
-            batch.vertices[18 + iOffset] = {voxVerts[4] + voxelPos, colour};
-            batch.vertices[19 + iOffset] = {voxVerts[3] + voxelPos, colour};
-            batch.vertices[20 + iOffset] = {voxVerts[0] + voxelPos, colour}; // WEST
-            batch.vertices[21 + iOffset] = {voxVerts[7] + voxelPos, colour};
-            batch.vertices[22 + iOffset] = {voxVerts[6] + voxelPos, colour};
-            batch.vertices[23 + iOffset] = {voxVerts[1] + voxelPos, colour};
-            
-            for(uint16_t row = 0; row < 6; row++)
+    const size_t tempIndexBlockSize = sizeof(uint16_t) * 18 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
+    uint16_t *tempBlockIndices = static_cast<uint16_t*>(malloc(tempIndexBlockSize));
+    memset(tempBlockIndices, 0, tempIndexBlockSize);
+    uint16_t *tempBlockIndexIncrementer = tempBlockIndices;
+    
+    for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
+        for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
+            for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
             {
-                uint16_t rowOffset = row * 6 + 36 * static_cast<uint16_t>(i);
-                uint16_t indexOffset = 4 * row + 24 * static_cast<uint16_t>(i);
-                batch.indices[rowOffset]     = 0 + indexOffset;
-                batch.indices[rowOffset + 1] = 1 + indexOffset;
-                batch.indices[rowOffset + 2] = 2 + indexOffset;
-                batch.indices[rowOffset + 3] = 2 + indexOffset;
-                batch.indices[rowOffset + 4] = 3 + indexOffset;
-                batch.indices[rowOffset + 5] = 0 + indexOffset;
+                if(chunk->pBlocks[x][y][z].isActive == false)
+                    continue;
+                // TODO: set indices
+                vec3 positionOffset = {};
+                positionOffset.X = static_cast<float>(x);
+                positionOffset.Y = static_cast<float>(y);
+                positionOffset.Z = static_cast<float>(z);
+                if(x > 0)
+                {
+                    const mpVertex newNorthVertices[4] = {
+                        {_mpVoxelFaceNorth[0] + positionOffset, colour}, {_mpVoxelFaceNorth[1] + positionOffset, colour},
+                        {_mpVoxelFaceNorth[2] + positionOffset, colour}, {_mpVoxelFaceNorth[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newNorthVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
+                if(x < (MP_CHUNK_SIZE - 1))
+                {
+                    const mpVertex newSouthVertices[4] = {
+                        {_mpVoxelFaceSouth[0] + positionOffset, colour}, {_mpVoxelFaceSouth[1] + positionOffset, colour},
+                        {_mpVoxelFaceSouth[2] + positionOffset, colour}, {_mpVoxelFaceSouth[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newSouthVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
+                if(y > 0)
+                {
+                    const mpVertex newEastVertices[4] = {
+                        {_mpVoxelFaceEast[0] + positionOffset, colour}, {_mpVoxelFaceEast[1] + positionOffset, colour},
+                        {_mpVoxelFaceEast[2] + positionOffset, colour}, {_mpVoxelFaceEast[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newEastVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
+                if(y < (MP_CHUNK_SIZE - 1))
+                {
+                    const mpVertex newWestVertices[4] = {
+                        {_mpVoxelFaceWest[0] + positionOffset, colour}, {_mpVoxelFaceWest[1] + positionOffset, colour},
+                        {_mpVoxelFaceWest[2] + positionOffset, colour}, {_mpVoxelFaceWest[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newWestVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
+                if(z > 0)
+                {
+                    const mpVertex newTopVertices[4] = {
+                        {_mpVoxelFaceTop[0] + positionOffset, colour}, {_mpVoxelFaceTop[1] + positionOffset, colour},
+                        {_mpVoxelFaceTop[2] + positionOffset, colour}, {_mpVoxelFaceTop[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newTopVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
+                if(z < (MP_CHUNK_SIZE - 1))
+                {
+                    const mpVertex newBottomVertices[4] = {
+                        {_mpVoxelFaceBottom[0] + positionOffset, colour}, {_mpVoxelFaceBottom[1] + positionOffset, colour},
+                        {_mpVoxelFaceBottom[2] + positionOffset, colour}, {_mpVoxelFaceBottom[3] + positionOffset, colour}
+                    };
+                    memcpy(tempBlockVertIncrementer, &newBottomVertices, sizeof(mpVertex) * 4);
+                    const uint16_t newIndices[_mpVoxelIndexStride] = {
+                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
+                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
+                    };
+                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
+                    tempBlockVertIncrementer += 4;
+                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
+                    indexCount += _mpVoxelIndexStride;
+                    vertexCount += 4;
+                }
             }
         }
     }
-    return batch;
+    mpMesh mesh = {};
+    mesh.verticesSize = static_cast<size_t>(vertexCount) * sizeof(mpVertex);
+    mesh.indicesSize = static_cast<size_t>(indexCount) * sizeof(uint16_t);
+    mesh.vertices = static_cast<mpVertex*>(malloc(mesh.verticesSize));
+    mesh.indices = static_cast<uint16_t*>(malloc(mesh.indicesSize));
+    mesh.indexCount = indexCount;
+    
+    memcpy(mesh.vertices, tempBlockVertices, mesh.verticesSize);
+    memcpy(mesh.indices, tempBlockIndices, mesh.indicesSize);
+    free(tempBlockVertices);
+    free(tempBlockIndices);
+    
+    return mesh;
 }
 
-static void PrepareRenderData(mpMemory *memory, mpVoxelData *voxelData)
+inline static void mpDestroyChunkMesh(mpMesh mesh)
 {
-    voxelData->pBatches = static_cast<mpBatch*>(PushBackPermanentStorage(memory, sizeof(mpBatch) * voxelData->batchCount));
-    
-    vec2 area = {30.0f, 30.0f};
-    voxelData->voxelsPerBatch = static_cast<uint32_t>(area.X * area.Y);
-    
-    for(uint32_t batchIndex = 0; batchIndex < voxelData->batchCount; batchIndex++)
-        voxelData->pBatches[batchIndex] = CreateBatch(memory, voxelData->voxelScale, {0.0f, 0.0f}, area);
+    free(mesh.vertices);
+    free(mesh.indices);
 }
 
-inline static void ProcessKeyToCameraControl(const mpEventReceiver *const receiver, mpKeyEvent key, bool32 *controlValue)
+inline static void ProcessKeyToCameraControl(const mpEventReceiver *receiver, mpKeyEvent key, bool32 *controlValue)
 {
     if(receiver->keyPressedEvents & key)
         (*controlValue) = true;
@@ -100,45 +225,16 @@ inline static void ProcessKeyToCameraControl(const mpEventReceiver *const receiv
         (*controlValue) = false;
 }
 
-static void UpdateCamera(const mpEventReceiver *const receiver, mpCamera *const camera, mpCameraControls *const cameraControls, float aspectRatio, float timestep)
+static void GetCurrentCameraControls(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
 {
-    ProcessKeyToCameraControl(receiver, MP_KEY_W, &cameraControls->rUp);
-    ProcessKeyToCameraControl(receiver, MP_KEY_S, &cameraControls->rDown);
-    ProcessKeyToCameraControl(receiver, MP_KEY_A, &cameraControls->rLeft);
-    ProcessKeyToCameraControl(receiver, MP_KEY_D, &cameraControls->rRight);
-    ProcessKeyToCameraControl(receiver, MP_KEY_UP, &cameraControls->tForward);
-    ProcessKeyToCameraControl(receiver, MP_KEY_DOWN, &cameraControls->tBackward);
-    ProcessKeyToCameraControl(receiver, MP_KEY_LEFT, &cameraControls->tLeft);
-    ProcessKeyToCameraControl(receiver, MP_KEY_RIGHT, &cameraControls->tRight);
-    
-    if(cameraControls->rUp)
-        camera->pitch += camera->sensitivity * timestep;
-    else if(cameraControls->rDown)
-        camera->pitch -= camera->sensitivity * timestep;
-    if(cameraControls->rLeft)
-        camera->yaw += camera->sensitivity * timestep;
-    else if(cameraControls->rRight)
-        camera->yaw -= camera->sensitivity * timestep;
-    
-    if(camera->pitch > camera->pitchClamp)
-        camera->pitch = camera->pitchClamp;
-    else if(camera->pitch < -camera->pitchClamp)
-        camera->pitch = -camera->pitchClamp;
-    
-    // TODO: clamp pitch
-    vec3 front = {cosf(camera->pitch) * cosf(camera->yaw), cosf(camera->pitch) * sinf(camera->yaw), sinf(camera->pitch)};
-    vec3 left = {sinf(camera->yaw), -cosf(camera->yaw), 0.0f};
-    if(cameraControls->tForward)
-        camera->position += front * camera->speed * timestep;
-    else if(cameraControls->tBackward)
-        camera->position -= front * camera->speed * timestep;
-    if(cameraControls->tLeft)
-        camera->position -= left * camera->speed * timestep;
-    else if(cameraControls->tRight)
-        camera->position += left * camera->speed * timestep;
-    
-    camera->view = LookAt(camera->position, camera->position + front, {0.0f, 0.0f, 1.0f});
-    camera->projection = Perspective(camera->fov, aspectRatio, 0.1f, 20.0f);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_W, &cameraControls->rUp);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_S, &cameraControls->rDown);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_A, &cameraControls->rLeft);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_D, &cameraControls->rRight);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_UP, &cameraControls->tForward);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_DOWN, &cameraControls->tBackward);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_LEFT, &cameraControls->tLeft);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_RIGHT, &cameraControls->tRight);
 }
 
 inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
@@ -158,12 +254,12 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
 }
 
 int main(int argc, char *argv[])
-{
-    mpCallbacks callbacks = {};
+{    
     mpWindowData windowData = {};
-    Win32CreateWindow(&windowData, &callbacks); // TODO: Change Win32CreateWindow() to CreateWindow()
+    PlatformCreateWindow(&windowData);
     // TODO: Prepare win32 sound
-    
+    mpCallbacks callbacks = PlatformGetCallbacks();
+    // TODO: Implement new memory system
     mpMemory memory = {};
     memory.PermanentStorageSize = MegaBytes(64);
     memory.TransientStorageSize = GigaBytes(1);
@@ -173,48 +269,94 @@ int main(int argc, char *argv[])
     memory.PermanentStorage = memory.CombinedStorage;
     memory.TransientStorage = static_cast<uint8_t*>(memory.CombinedStorage) + memory.PermanentStorageSize;
     
-    mpVoxelData voxelData = {};
-    voxelData.gridXWidth = 50;
-    voxelData.voxelScale = 0.2f;
-    voxelData.batchCount = 1;
-    PrepareRenderData(&memory, &voxelData);
+    // TODO: use memory arena here
+    mpWorldData worldData = {};
+    worldData.chunkCount = 1;
+    worldData.chunks = static_cast<mpVoxelChunk*>(malloc(sizeof(mpVoxelChunk) * worldData.chunkCount));
+    
+    mpRenderData renderData = {};
+    renderData.meshCount = worldData.chunkCount;
+    renderData.meshes = static_cast<mpMesh*>(malloc(sizeof(mpMesh) * renderData.meshCount));
+    
+    for(uint32_t i = 0; i < worldData.chunkCount; i++)
+        worldData.chunks[i] = mpCreateVoxelChunk();
+    
+    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
+    for(uint32_t i = 0; i < worldData.chunkCount; i++)
+        renderData.meshes[i] = mpCreateChunkMesh(&worldData.chunks[i]);
     
     mpCamera camera = {};
     camera.speed = 2.0f;
     camera.sensitivity = 2.0f;
     camera.fov = PI32 / 3.0f;
     camera.model = Mat4x4Identity();
-    camera.position = {2.0f, 2.0f, 2.0f};
+    camera.position = vec3{2.0f, 2.0f, 2.0f};
     camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
     
     mpRenderer renderer = nullptr;
-    mpVulkanInit(&renderer, &memory, &windowData, &voxelData, &callbacks);
+    mpVulkanInit(&renderer, &memory, &windowData, &renderData, &callbacks);
     
-    mpEventReceiver eventReceiver = {};
     mpCameraControls cameraControls = {};
-    mpFPSsampler fpsSampler = {1000,0,0};
+    mpEventReceiver eventReceiver = {};
     
+    mpFPSsampler fpsSampler = {1000,0,0};
     float timestep = 0.0f;
     int64_t lastCounter = 0, perfCountFrequency = 0;
-    Win32PrepareClock(&lastCounter, &perfCountFrequency);
+    PlatformPrepareClock(&lastCounter, &perfCountFrequency);
     
     windowData.running = true;
     windowData.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
     while(windowData.running)
     {
-        Win32PollEvents(&eventReceiver);
+        PlatformPollEvents(&eventReceiver);
         
-        UpdateCamera(&eventReceiver, &camera, &cameraControls, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), timestep);
+        GetCurrentCameraControls(&eventReceiver, &cameraControls);
         
-        mpVulkanUpdate(&renderer, &voxelData, &camera, &windowData);
+        if(cameraControls.rUp)
+            camera.pitch += camera.sensitivity * timestep;
+        else if(cameraControls.rDown)
+            camera.pitch -= camera.sensitivity * timestep;
+        if(cameraControls.rLeft)
+            camera.yaw += camera.sensitivity * timestep;
+        else if(cameraControls.rRight)
+            camera.yaw -= camera.sensitivity * timestep;
+        
+        if(camera.pitch > camera.pitchClamp)
+            camera.pitch = camera.pitchClamp;
+        else if(camera.pitch < -camera.pitchClamp)
+            camera.pitch = -camera.pitchClamp;
+        
+        vec3 front = {cosf(camera.pitch) * cosf(camera.yaw), cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch)};
+        vec3 left = {sinf(camera.yaw), -cosf(camera.yaw), 0.0f};
+        if(cameraControls.tForward)
+            camera.position += front * camera.speed * timestep;
+        else if(cameraControls.tBackward)
+            camera.position -= front * camera.speed * timestep;
+        if(cameraControls.tLeft)
+            camera.position -= left * camera.speed * timestep;
+        else if(cameraControls.tRight)
+            camera.position += left * camera.speed * timestep;
+        
+        camera.view = LookAt(camera.position, camera.position + front, {0.0f, 0.0f, 1.0f});
+        camera.projection = Perspective(camera.fov, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), 0.1f, 20.0f);
+        
+        mpVulkanUpdate(&renderer, &renderData, &camera, &windowData);
         
         windowData.hasResized = false;
         ResetEventReceiver(&eventReceiver);
-        timestep = Win32UpdateClock(&lastCounter, perfCountFrequency);
+        timestep = PlatformUpdateClock(&lastCounter, perfCountFrequency);
         UpdateFpsSampler(&fpsSampler, timestep);
     }
     
-    mpVulkanCleanup(&renderer, voxelData.batchCount);
+    mpVulkanCleanup(&renderer, renderData.meshCount);
+    
+    for(uint32_t k = 0; k < renderData.meshCount; k++)
+    {
+        mpDestroyChunkMesh(renderData.meshes[k]);
+        mpDestroyVoxelChunk(worldData.chunks[k]);
+    }
+    free(renderData.meshes);
+    free(worldData.chunks);
     
     return 0;
 }

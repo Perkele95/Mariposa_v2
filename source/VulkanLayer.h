@@ -6,8 +6,8 @@
 #include "..\Vulkan\Include\vulkan\vulkan_win32.h"
 #endif
 
-void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpVoxelData *const voxelData, const mpCallbacks *const callbacks);
-void mpVulkanUpdate(mpRenderer *pRenderer, const mpVoxelData *const voxelData, const mpCamera *const camera, const mpWindowData *const windowData);
+void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks);
+void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const mpCamera *const camera, const mpWindowData *const windowData);
 void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount);
 
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
@@ -15,10 +15,8 @@ const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
 struct QueueFamilyIndices {
     uint32_t graphicsFamily;
     bool32 hasGraphicsFamily;
-    
     uint32_t presentFamily;
     bool32 hasPresentFamily;
-    
     bool32 isComplete;
 };
 
