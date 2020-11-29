@@ -4,6 +4,7 @@
 #include <cstring>
 #include "..\Vulkan\Include\vulkan\vulkan.h"
 #include "mp_maths.h"
+#include "memory.h"
 
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
@@ -23,9 +24,8 @@
 #define PI32_D 6.28318530718f
 
 typedef int32_t bool32;
-typedef void* mpHandle;
-typedef mpHandle mpRenderer;
-typedef mpHandle mpFileHandle;
+typedef uint8_t* mpRenderer;
+typedef void* mpFileHandle;
 
 #define KiloBytes(value) (value * 1024LL)
 #define MegaBytes(value) (value * 1024LL * 1024LL)
@@ -53,15 +53,6 @@ struct mpCallbacks
     void (*mpCloseFile)(mpFileHandle *handle);
     mpFile (*mpReadFile)(const char *filename);
     bool32 (*mpWriteFile)(const char *filename, mpFile *file);
-};
-
-struct mpMemory
-{
-    void *CombinedStorage;
-    void *PermanentStorage;
-    uint64_t PermanentStorageSize;
-    void *TransientStorage;
-    uint64_t TransientStorageSize;
 };
 
 struct mpThreadContext
@@ -135,16 +126,7 @@ struct mpCameraControls
     bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
 };
 
-inline static void* PushBackPermanentStorage(mpMemory* memory, size_t pushSize)
+struct mpEngine
 {
-    void* result = memory->PermanentStorage;
-    memory->PermanentStorage = static_cast<uint8_t*>(memory->PermanentStorage) + pushSize;
-    return result;
-}
-
-inline static void* PushBackTransientStorage(mpMemory* memory, size_t pushSize)
-{
-    void* result = memory->TransientStorage;
-    memory->TransientStorage = static_cast<uint8_t*>(memory->TransientStorage) + pushSize;
-    return result;
-}
+    const char *name;
+};

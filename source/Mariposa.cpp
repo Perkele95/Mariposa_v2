@@ -259,15 +259,10 @@ int main(int argc, char *argv[])
     PlatformCreateWindow(&windowData);
     // TODO: Prepare win32 sound
     mpCallbacks callbacks = PlatformGetCallbacks();
-    // TODO: Implement new memory system
-    mpMemory memory = {};
-    memory.PermanentStorageSize = MegaBytes(64);
-    memory.TransientStorageSize = GigaBytes(1);
-    uint64_t totalSize = memory.PermanentStorageSize + memory.TransientStorageSize;
-    memory.CombinedStorage = malloc(totalSize);
-    memset(memory.CombinedStorage, 0, totalSize);
-    memory.PermanentStorage = memory.CombinedStorage;
-    memory.TransientStorage = static_cast<uint8_t*>(memory.CombinedStorage) + memory.PermanentStorageSize;
+        
+    mpMemoryArena rendererArena = mpCreateMemoryArena(MegaBytes(64));
+    mpMemoryArena transientArena = mpCreateMemoryArena(MegaBytes(64));
+    mpMemorySubdivision vulkanMemory = mpSubdivideMemoryArena(&rendererArena, MegaBytes(1));
     
     // TODO: use memory arena here
     mpWorldData worldData = {};
@@ -294,7 +289,7 @@ int main(int argc, char *argv[])
     camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
     
     mpRenderer renderer = nullptr;
-    mpVulkanInit(&renderer, &memory, &windowData, &renderData, &callbacks);
+    mpVulkanInit(&renderer, &vulkanMemory, &windowData, &renderData, &callbacks);
     
     mpCameraControls cameraControls = {};
     mpEventReceiver eventReceiver = {};
@@ -357,6 +352,10 @@ int main(int argc, char *argv[])
     }
     free(renderData.meshes);
     free(worldData.chunks);
+    
+    mpDestroyMemorySubdivision(vulkanMemory);
+    mpDestroyMemoryArena(rendererArena);
+    mpDestroyMemoryArena(transientArena);
     
     return 0;
 }

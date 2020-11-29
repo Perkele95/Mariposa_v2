@@ -322,21 +322,21 @@ VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windo
     }
 }
 
-static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemory *memory, int32_t width, int32_t height)
+static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemorySubdivision *memory, int32_t width, int32_t height)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
     
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
     if(renderer->swapDetails.formatCount > 0)
     {
-        renderer->swapDetails.pFormats = (VkSurfaceFormatKHR*) PushBackPermanentStorage(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount);
+        renderer->swapDetails.pFormats = reinterpret_cast<VkSurfaceFormatKHR*>(mpPushBackMemorySubdivision(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
     }
     
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
     if(renderer->swapDetails.presentModeCount > 0)
     {
-        renderer->swapDetails.pPresentModes = (VkPresentModeKHR*) PushBackPermanentStorage(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount);
+        renderer->swapDetails.pPresentModes = reinterpret_cast<VkPresentModeKHR*>(mpPushBackMemorySubdivision(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
     }
     
@@ -383,17 +383,16 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemory *memory, int32_t
     
     VkResult error = vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &renderer->swapChain);
     mp_assert(!error)
-    // TODO: allcoate images
+    
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
-    renderer->pSwapChainImages = (VkImage*) PushBackPermanentStorage(memory, sizeof(VkImageView) * imageCount);
+    renderer->pSwapChainImages = reinterpret_cast<VkImage*>(mpPushBackMemorySubdivision(memory, sizeof(VkImageView) * imageCount));
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
     
     renderer->swapChainImageCount = imageCount;
     renderer->swapChainImageFormat = surfaceFormat.format;
     renderer->swapChainExtent = extent;
     
-    // Create image views
-    renderer->pSwapChainImageViews = (VkImageView*) PushBackPermanentStorage(memory, sizeof(VkImageView) * renderer->swapChainImageCount);
+    renderer->pSwapChainImageViews = reinterpret_cast<VkImageView*>(mpPushBackMemorySubdivision(memory, sizeof(VkImageView) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         renderer->pSwapChainImageViews[i] = CreateImageView(renderer->device, renderer->pSwapChainImages[i], renderer->swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 }
@@ -982,11 +981,11 @@ static void PrepareVkSyncObjects(mpVkRenderer *renderer)
     }
 }
 
-static bool32 CheckValidationLayerSupport(mpMemory *memory)
+static bool32 CheckValidationLayerSupport(mpMemorySubdivision *memory)
 {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    VkLayerProperties* availableLayers = (VkLayerProperties*) PushBackTransientStorage(memory, sizeof(VkLayerProperties) * layerCount);
+    VkLayerProperties* availableLayers = reinterpret_cast<VkLayerProperties*>(mpPushBackMemorySubdivision(memory, sizeof(VkLayerProperties) * layerCount));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
     
     bool32 layerFound = false;
@@ -1005,10 +1004,10 @@ static bool32 CheckValidationLayerSupport(mpMemory *memory)
     return layerFound;
 }
 
-void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks)
+void mpVulkanInit(mpRenderer *pRenderer, mpMemorySubdivision *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks)
 {
-    (*pRenderer) = PushBackPermanentStorage(memory, sizeof(mpVkRenderer));
-    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
+    *pRenderer = mpPushBackMemorySubdivision(memory, sizeof(mpVkRenderer));
+    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
     
     bool32 enableValidation = true;
     if(enableValidation && !CheckValidationLayerSupport(memory))
@@ -1021,16 +1020,16 @@ void mpVulkanInit(mpRenderer *pRenderer, mpMemory *memory, mpWindowData *windowD
     PrepareShaderModules(renderer, callbacks);
     PrepareVkPipeline(renderer);
     
-    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  PushBackPermanentStorage(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
-    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(PushBackPermanentStorage(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
-    renderer->pInFlightImageFences =   static_cast<VkFence*>(        PushBackPermanentStorage(memory, sizeof(VkFence) * renderer->swapChainImageCount));
-    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(PushBackPermanentStorage(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderData->meshCount));
-    renderer->indexbuffers =           static_cast<VkBuffer*>(       PushBackPermanentStorage(memory, sizeof(VkBuffer) * renderData->meshCount));
-    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
-    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( PushBackPermanentStorage(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
+    renderer->pFramebuffers =          reinterpret_cast<VkFramebuffer*>(  mpPushBackMemorySubdivision(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        reinterpret_cast<VkCommandBuffer*>(mpPushBackMemorySubdivision(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   reinterpret_cast<VkFence*>(        mpPushBackMemorySubdivision(memory, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        reinterpret_cast<VkDescriptorSet*>(mpPushBackMemorySubdivision(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderData->meshCount));
+    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderData->meshCount));
+    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
+    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
     
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, renderData);
@@ -1090,7 +1089,7 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
 
 void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const mpCamera *const camera, const mpWindowData *const windowData)
 {
-    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
+    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
     
     if(windowData->width == 0 || windowData->height == 0)
         return;
@@ -1156,7 +1155,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const
 
 void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount)
 {
-    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*pRenderer);
+    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
     
     CleanupSwapChain(renderer);
     
