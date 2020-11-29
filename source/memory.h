@@ -31,10 +31,6 @@ inline mpMemoryArena mpCreateMemoryArena(size_t size)
 
 inline void mpDestroyMemoryArena(mpMemoryArena arena)
 {
-    if(arena.subDivCount == 0)
-    {
-        // TODO: Print runtime error
-    }
     free(arena.begin);
     arena.size = 0;
 }
@@ -71,11 +67,4 @@ inline uint8_t* mpPushBackMemorySubdivision(mpMemorySubdivision *subDiv, size_t 
         // TODO: Print runtime error
     }
     return bytePtr;
-}
-
-inline void mpDestroyMemorySubdivision(mpMemorySubdivision subDiv)
-{
-    memset(subDiv.data, 0, subDiv.size);
-    subDiv.parent->subDivCount--;
-    subDiv.size = 0;
 }

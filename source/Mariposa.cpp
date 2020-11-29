@@ -31,22 +31,30 @@ const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVer
 const uint16_t _mpVoxelIndexStride = 6;
 const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
 
+const vec3 _mpBlockColours[Voxel_Type_MAX] = {
+    {0.0f, 0.0f, 0.0f},
+    {0.0f, 1.0f, 0.2f},
+    {0.5f, 0.4f, 0.2f},
+    {0.4f, 0.4f, 0.4f},
+};
+
 static mpVoxelChunk mpCreateVoxelChunk()
 {
+    size_t chunkSize3x = MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
     mpVoxelChunk chunk = {};
     chunk.size = MP_CHUNK_SIZE;
     chunk.pBlocks = static_cast<mpVoxelBlock***>(malloc(sizeof(mpVoxelBlock**) * MP_CHUNK_SIZE));
     *chunk.pBlocks = static_cast<mpVoxelBlock**>(malloc(sizeof(mpVoxelBlock*) * MP_CHUNK_SIZE * MP_CHUNK_SIZE));
-    **chunk.pBlocks = static_cast<mpVoxelBlock*>(malloc(sizeof(mpVoxelBlock) * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE));
+    **chunk.pBlocks = static_cast<mpVoxelBlock*>(malloc(sizeof(mpVoxelBlock) * chunkSize3x));
     // Pointer to pointer assignment
     for(uint32_t i = 1; i < MP_CHUNK_SIZE; i++)
-        chunk.pBlocks[i] = &chunk.pBlocks[0][i * MP_CHUNK_SIZE];
+        chunk.pBlocks[i] = &chunk.pBlocks[0][0] + i * MP_CHUNK_SIZE;
     // Pointer assignment
     for(uint32_t i = 0; i < MP_CHUNK_SIZE; i++)
         for(uint32_t k = 0; k < MP_CHUNK_SIZE; k++)
-            chunk.pBlocks[i][k] = &chunk.pBlocks[0][i][k * MP_CHUNK_SIZE];
+            chunk.pBlocks[i][k] = (&chunk.pBlocks[0][0][0]) + i * MP_CHUNK_SIZE * MP_CHUNK_SIZE + k * MP_CHUNK_SIZE;
     // Zero out each chunk so all chunks are empty and not active by default
-    memset(&(***chunk.pBlocks), 0, sizeof(mpVoxelBlock) * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE);
+    memset(&(***chunk.pBlocks), 0, sizeof(mpVoxelBlock) * chunkSize3x);
     
     return chunk;
 }
@@ -58,10 +66,19 @@ inline static void mpDestroyVoxelChunk(mpVoxelChunk chunk)
     free(chunk.pBlocks);
 }
 
+enum mpVoxelCullingFlags
+{
+    VOXEL_CULLING_FLAG_TOP = 0x0001,
+    VOXEL_CULLING_FLAG_BOTTOM = 0x0002,
+    VOXEL_CULLING_FLAG_NORTH = 0x0004,
+    VOXEL_CULLING_FLAG_SOUTH = 0x0008,
+    VOXEL_CULLING_FLAG_EAST = 0x0010,
+    VOXEL_CULLING_FLAG_WEST = 0x0020,
+};
+
 // TODO: Function needs to be cleaned up after verification
 static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
 {
-    vec3 colour = {0.0f, 1.0f, 0.3f};
     uint16_t vertexCount = 0, indexCount = 0;
     // TODO: The sizes down below could be premultiplied
     const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
@@ -82,10 +99,27 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     continue;
                 // TODO: set indices
                 vec3 positionOffset = {};
+                vec3 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
+                uint32_t cullingFlags = 0;
+                if(x > 0 && chunk->pBlocks[x - 1][y][z].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_SOUTH;
+                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x + 1][y][z].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_NORTH;
+                
+                if(y > 0 && chunk->pBlocks[x][y - 1][z].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_WEST;
+                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x][y + 1][z].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_EAST;
+                
+                if(z > 0 && chunk->pBlocks[x][y][z - 1].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_BOTTOM;
+                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x][y][z + 1].isActive)
+                    cullingFlags |= VOXEL_CULLING_FLAG_TOP;
+                
                 positionOffset.X = static_cast<float>(x);
                 positionOffset.Y = static_cast<float>(y);
                 positionOffset.Z = static_cast<float>(z);
-                if(x > 0)
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_NORTH))
                 {
                     const mpVertex newNorthVertices[4] = {
                         {_mpVoxelFaceNorth[0] + positionOffset, colour}, {_mpVoxelFaceNorth[1] + positionOffset, colour},
@@ -103,7 +137,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(x < (MP_CHUNK_SIZE - 1))
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_SOUTH))
                 {
                     const mpVertex newSouthVertices[4] = {
                         {_mpVoxelFaceSouth[0] + positionOffset, colour}, {_mpVoxelFaceSouth[1] + positionOffset, colour},
@@ -121,7 +155,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(y > 0)
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_EAST))
                 {
                     const mpVertex newEastVertices[4] = {
                         {_mpVoxelFaceEast[0] + positionOffset, colour}, {_mpVoxelFaceEast[1] + positionOffset, colour},
@@ -139,7 +173,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(y < (MP_CHUNK_SIZE - 1))
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_WEST))
                 {
                     const mpVertex newWestVertices[4] = {
                         {_mpVoxelFaceWest[0] + positionOffset, colour}, {_mpVoxelFaceWest[1] + positionOffset, colour},
@@ -157,7 +191,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(z > 0)
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_TOP))
                 {
                     const mpVertex newTopVertices[4] = {
                         {_mpVoxelFaceTop[0] + positionOffset, colour}, {_mpVoxelFaceTop[1] + positionOffset, colour},
@@ -175,7 +209,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(z < (MP_CHUNK_SIZE - 1))
+                if(!(cullingFlags & VOXEL_CULLING_FLAG_BOTTOM))
                 {
                     const mpVertex newBottomVertices[4] = {
                         {_mpVoxelFaceBottom[0] + positionOffset, colour}, {_mpVoxelFaceBottom[1] + positionOffset, colour},
@@ -276,7 +310,27 @@ int main(int argc, char *argv[])
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
         worldData.chunks[i] = mpCreateVoxelChunk();
     
+    worldData.chunks[0].pBlocks[5][4][5].isActive = true;
+    worldData.chunks[0].pBlocks[5][4][5].type = Voxel_Type_Grass;
     worldData.chunks[0].pBlocks[5][5][5].isActive = true;
+    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
+    worldData.chunks[0].pBlocks[5][6][5].isActive = true;
+    worldData.chunks[0].pBlocks[5][6][5].type = Voxel_Type_Stone;
+    
+    worldData.chunks[0].pBlocks[4][5][5].isActive = true;
+    worldData.chunks[0].pBlocks[4][5][5].type = Voxel_Type_Grass;
+    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
+    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
+    worldData.chunks[0].pBlocks[6][5][5].isActive = true;
+    worldData.chunks[0].pBlocks[6][5][5].type = Voxel_Type_Stone;
+    
+    worldData.chunks[0].pBlocks[5][5][4].isActive = true;
+    worldData.chunks[0].pBlocks[5][5][4].type = Voxel_Type_Grass;
+    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
+    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
+    worldData.chunks[0].pBlocks[5][5][6].isActive = true;
+    worldData.chunks[0].pBlocks[5][5][6].type = Voxel_Type_Stone;
+    
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
         renderData.meshes[i] = mpCreateChunkMesh(&worldData.chunks[i]);
     
@@ -353,7 +407,6 @@ int main(int argc, char *argv[])
     free(renderData.meshes);
     free(worldData.chunks);
     
-    mpDestroyMemorySubdivision(vulkanMemory);
     mpDestroyMemoryArena(rendererArena);
     mpDestroyMemoryArena(transientArena);
     

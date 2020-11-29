@@ -94,6 +94,7 @@ enum mpVoxelType
     Voxel_Type_Grass,
     Voxel_Type_Dirt,
     Voxel_Type_Stone,
+    Voxel_Type_MAX,
 };
 
 struct mpVoxelBlock
@@ -129,4 +130,10 @@ struct mpCameraControls
 struct mpEngine
 {
     const char *name;
+    mpRenderer rendererHandle;
+    mpWorldData worldData;
+    mpCamera camera;
+    mpFPSsampler fpsSampler;
+    mpWindowData windowInfo;
+    mpCallbacks callbacks;
 };
