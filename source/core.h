@@ -5,9 +5,12 @@
 #include "..\Vulkan\Include\vulkan\vulkan.h"
 #include "mp_maths.h"
 #include "memory.h"
+#include "events.h"
 
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
+
+#include "logger.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -23,16 +26,15 @@
 #define PI32 3.14159265359f
 #define PI32_D 6.28318530718f
 
-typedef int32_t bool32;
-typedef uint8_t* mpRenderer;
-typedef void* mpFileHandle;
-
 #define KiloBytes(value) (value * 1024LL)
 #define MegaBytes(value) (value * 1024LL * 1024LL)
 #define GigaBytes(value) (value * 1024LL * 1024LL * 1024LL)
 #define TeraBytes(value) (value * 1024LL * 1024LL * 1024LL * 1024LL)
 
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
+
+typedef int32_t bool32;
+typedef void* mpHandle;
 
 struct mpWindowData
 {
@@ -42,7 +44,7 @@ struct mpWindowData
 
 struct mpFile
 {
-    mpFileHandle contents;
+    mpHandle handle;
     uint32_t size;
 };
 
@@ -50,7 +52,7 @@ struct mpCallbacks
 {
     void (*GetSurface)(VkInstance instance, VkSurfaceKHR *surface);// TODO: REPLACE
     // FILE IO
-    void (*mpCloseFile)(mpFileHandle *handle);
+    void (*mpCloseFile)(mpFile *file);
     mpFile (*mpReadFile)(const char *filename);
     bool32 (*mpWriteFile)(const char *filename, mpFile *file);
 };
@@ -62,7 +64,7 @@ struct mpThreadContext
 
 struct mpFPSsampler
 {
-    const uint32_t level;
+    uint32_t level;
     uint32_t count;
     float value;
 };
@@ -107,6 +109,7 @@ struct mpVoxelChunk
 {
     mpVoxelBlock ***pBlocks;
     uint32_t size;
+    vec3 position;
 };
 
 struct mpWorldData
@@ -130,10 +133,15 @@ struct mpCameraControls
 struct mpEngine
 {
     const char *name;
-    mpRenderer rendererHandle;
-    mpWorldData worldData;
-    mpCamera camera;
-    mpFPSsampler fpsSampler;
+    mpHandle rendererHandle;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
+    mpFPSsampler fpsSampler;
+    mpEventReceiver eventReceiver;
+    
+    mpCamera camera;
+    mpCameraControls camControls;
+    
+    mpWorldData worldData;
+    mpRenderData renderData;
 };

@@ -1,17 +1,15 @@
 #include "core.h"
 #include "Win32_Mariposa.h"
 #include "VulkanLayer.h"
-#include "events.h"
 
 #include <stdlib.h>
 #include <stdio.h>
-// TODO: Unglobal these
+
 #define MP_CHUNK_SIZE 16
 #define MP_VOXEL_SCALE 0.5f
-
-// TODO: Unglobal these
+// TODO: static global variables
 // Full cube vertex positions
-const vec3 voxVerts[8] = {
+static const vec3 voxVerts[8] = {
     {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
     { MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
     { MP_VOXEL_SCALE,  MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
@@ -21,17 +19,17 @@ const vec3 voxVerts[8] = {
     { MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
     {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
 };
-const vec3 _mpVoxelFaceTop[]    = {voxVerts[0], voxVerts[1], voxVerts[2], voxVerts[3]};
-const vec3 _mpVoxelFaceBottom[] = {voxVerts[4], voxVerts[5], voxVerts[6], voxVerts[7]};
-const vec3 _mpVoxelFaceNorth[]  = {voxVerts[1], voxVerts[6], voxVerts[5], voxVerts[2]};
-const vec3 _mpVoxelFaceSouth[]  = {voxVerts[3], voxVerts[4], voxVerts[7], voxVerts[0]};
-const vec3 _mpVoxelFaceEast[]   = {voxVerts[2], voxVerts[5], voxVerts[4], voxVerts[3]};
-const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVerts[1]};
+static const vec3 _mpVoxelFaceTop[]    = {voxVerts[0], voxVerts[1], voxVerts[2], voxVerts[3]};
+static const vec3 _mpVoxelFaceBottom[] = {voxVerts[4], voxVerts[5], voxVerts[6], voxVerts[7]};
+static const vec3 _mpVoxelFaceNorth[]  = {voxVerts[1], voxVerts[6], voxVerts[5], voxVerts[2]};
+static const vec3 _mpVoxelFaceSouth[]  = {voxVerts[3], voxVerts[4], voxVerts[7], voxVerts[0]};
+static const vec3 _mpVoxelFaceEast[]   = {voxVerts[2], voxVerts[5], voxVerts[4], voxVerts[3]};
+static const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVerts[1]};
 
-const uint16_t _mpVoxelIndexStride = 6;
-const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
+static const uint16_t _mpVoxelIndexStride = 6;
+static const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
 
-const vec3 _mpBlockColours[Voxel_Type_MAX] = {
+static const vec3 _mpBlockColours[Voxel_Type_MAX] = {
     {0.0f, 0.0f, 0.0f},
     {0.0f, 1.0f, 0.2f},
     {0.5f, 0.4f, 0.2f},
@@ -66,21 +64,21 @@ inline static void mpDestroyVoxelChunk(mpVoxelChunk chunk)
     free(chunk.pBlocks);
 }
 
-enum mpVoxelCullingFlags
-{
-    VOXEL_CULLING_FLAG_TOP = 0x0001,
-    VOXEL_CULLING_FLAG_BOTTOM = 0x0002,
-    VOXEL_CULLING_FLAG_NORTH = 0x0004,
-    VOXEL_CULLING_FLAG_SOUTH = 0x0008,
-    VOXEL_CULLING_FLAG_EAST = 0x0010,
-    VOXEL_CULLING_FLAG_WEST = 0x0020,
-};
-
 // TODO: Function needs to be cleaned up after verification
 static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
 {
+    enum mpVoxelCullingFlagBits
+    {
+        VOXEL_CULLING_FLAG_TOP = 0x0001,
+        VOXEL_CULLING_FLAG_BOTTOM = 0x0002,
+        VOXEL_CULLING_FLAG_NORTH = 0x0004,
+        VOXEL_CULLING_FLAG_SOUTH = 0x0008,
+        VOXEL_CULLING_FLAG_EAST = 0x0010,
+        VOXEL_CULLING_FLAG_WEST = 0x0020,
+    };
+    
     uint16_t vertexCount = 0, indexCount = 0;
-    // TODO: The sizes down below could be premultiplied
+    
     const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
     mpVertex *tempBlockVertices = static_cast<mpVertex*>(malloc(tempVertBlockSize));
     memset(tempBlockVertices, 0, tempVertBlockSize);
@@ -98,7 +96,6 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(chunk->pBlocks[x][y][z].isActive == false)
                     continue;
                 // TODO: set indices
-                vec3 positionOffset = {};
                 vec3 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
                 uint32_t cullingFlags = 0;
                 if(x > 0 && chunk->pBlocks[x - 1][y][z].isActive)
@@ -116,9 +113,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x][y][z + 1].isActive)
                     cullingFlags |= VOXEL_CULLING_FLAG_TOP;
                 
-                positionOffset.X = static_cast<float>(x);
-                positionOffset.Y = static_cast<float>(y);
-                positionOffset.Z = static_cast<float>(z);
+                vec3 positionOffset = {};
+                positionOffset.X = static_cast<float>(x) + chunk->position.X;
+                positionOffset.Y = static_cast<float>(y) + chunk->position.Y;
+                positionOffset.Z = static_cast<float>(z) + chunk->position.Z;
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_NORTH))
                 {
                     const mpVertex newNorthVertices[4] = {
@@ -259,7 +257,7 @@ inline static void ProcessKeyToCameraControl(const mpEventReceiver *receiver, mp
         (*controlValue) = false;
 }
 
-static void GetCurrentCameraControls(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
+static void UpdateCameraControlState(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
 {
     ProcessKeyToCameraControl(eventReceiver, MP_KEY_W, &cameraControls->rUp);
     ProcessKeyToCameraControl(eventReceiver, MP_KEY_S, &cameraControls->rDown);
@@ -287,125 +285,151 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
     }
 }
 
+static void mpGenerateTerrain(mpVoxelChunk *chunk)
+{
+    // TODO: Use seed as paremeter to be able to generate different worlds
+    float heightMap = 0.0f, globalX = 0.0f, globalY = 0.0f;
+    
+    for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
+        for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
+            for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
+            {
+                globalX = chunk->position.X + static_cast<float>(x);
+                globalY = chunk->position.Y + static_cast<float>(y);
+                
+                heightMap = Perlin(globalX / 100.0f, globalY / 100.0f);
+                heightMap *= 400.0f;
+                
+                if(static_cast<float>(z) <= heightMap)
+                {
+                    chunk->pBlocks[x][y][z].isActive = true;
+                    chunk->pBlocks[x][y][z].type = Voxel_Type_Grass;
+                }
+            }
+        }
+    }
+}
+
+static mpWorldData mpGenerateWorldData()
+{
+    mpWorldData worldData = {};
+    worldData.chunkCount = 2;
+    worldData.chunks = static_cast<mpVoxelChunk*>(malloc(sizeof(mpVoxelChunk) * worldData.chunkCount));
+    
+    for(uint32_t i = 0; i < worldData.chunkCount; i++)
+    {
+        worldData.chunks[i] = mpCreateVoxelChunk();
+        worldData.chunks[i].position.X = static_cast<float>(i * MP_CHUNK_SIZE);
+        mpGenerateTerrain(&worldData.chunks[i]);
+    }
+    
+    return worldData;
+}
+
+static mpRenderData mpGenerateRenderData(const mpWorldData *worldData)
+{
+    mpRenderData renderData = {};
+    
+    renderData.meshCount = worldData->chunkCount;
+    renderData.meshes = static_cast<mpMesh*>(malloc(sizeof(mpMesh) * renderData.meshCount));
+    
+    for(uint32_t i = 0; i < renderData.meshCount; i++)
+        renderData.meshes[i] = mpCreateChunkMesh(&worldData->chunks[i]);
+    
+    return renderData;
+}
+
 int main(int argc, char *argv[])
-{    
-    mpWindowData windowData = {};
-    PlatformCreateWindow(&windowData);
+{
+    mpEngine engine = {};
+    engine.name = "Mariposa";
+    engine.windowInfo = {};
+    
+    PlatformCreateWindow(&engine.windowInfo);
     // TODO: Prepare win32 sound
-    mpCallbacks callbacks = PlatformGetCallbacks();
-        
+    engine.callbacks = PlatformGetCallbacks();
+    
     mpMemoryArena rendererArena = mpCreateMemoryArena(MegaBytes(64));
     mpMemoryArena transientArena = mpCreateMemoryArena(MegaBytes(64));
     mpMemorySubdivision vulkanMemory = mpSubdivideMemoryArena(&rendererArena, MegaBytes(1));
     
     // TODO: use memory arena here
-    mpWorldData worldData = {};
-    worldData.chunkCount = 1;
-    worldData.chunks = static_cast<mpVoxelChunk*>(malloc(sizeof(mpVoxelChunk) * worldData.chunkCount));
+    engine.worldData = mpGenerateWorldData();
+    engine.renderData = mpGenerateRenderData(&engine.worldData);
     
-    mpRenderData renderData = {};
-    renderData.meshCount = worldData.chunkCount;
-    renderData.meshes = static_cast<mpMesh*>(malloc(sizeof(mpMesh) * renderData.meshCount));
+    mpVulkanInit(&engine, &vulkanMemory);
     
-    for(uint32_t i = 0; i < worldData.chunkCount; i++)
-        worldData.chunks[i] = mpCreateVoxelChunk();
+    engine.camera = {};
+    engine.camera.speed = 2.0f;
+    engine.camera.sensitivity = 2.0f;
+    engine.camera.fov = PI32 / 4.0f;
+    engine.camera.model = Mat4x4Identity();
+    engine.camera.position = vec3{2.0f, 2.0f, 2.0f};
+    engine.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
     
-    worldData.chunks[0].pBlocks[5][4][5].isActive = true;
-    worldData.chunks[0].pBlocks[5][4][5].type = Voxel_Type_Grass;
-    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
-    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
-    worldData.chunks[0].pBlocks[5][6][5].isActive = true;
-    worldData.chunks[0].pBlocks[5][6][5].type = Voxel_Type_Stone;
+    engine.camControls = {};
+    engine.eventReceiver = {};
     
-    worldData.chunks[0].pBlocks[4][5][5].isActive = true;
-    worldData.chunks[0].pBlocks[4][5][5].type = Voxel_Type_Grass;
-    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
-    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
-    worldData.chunks[0].pBlocks[6][5][5].isActive = true;
-    worldData.chunks[0].pBlocks[6][5][5].type = Voxel_Type_Stone;
+    engine.fpsSampler = {};
+    engine.fpsSampler.level = 1000;
     
-    worldData.chunks[0].pBlocks[5][5][4].isActive = true;
-    worldData.chunks[0].pBlocks[5][5][4].type = Voxel_Type_Grass;
-    worldData.chunks[0].pBlocks[5][5][5].isActive = true;
-    worldData.chunks[0].pBlocks[5][5][5].type = Voxel_Type_Dirt;
-    worldData.chunks[0].pBlocks[5][5][6].isActive = true;
-    worldData.chunks[0].pBlocks[5][5][6].type = Voxel_Type_Stone;
-    
-    for(uint32_t i = 0; i < worldData.chunkCount; i++)
-        renderData.meshes[i] = mpCreateChunkMesh(&worldData.chunks[i]);
-    
-    mpCamera camera = {};
-    camera.speed = 2.0f;
-    camera.sensitivity = 2.0f;
-    camera.fov = PI32 / 3.0f;
-    camera.model = Mat4x4Identity();
-    camera.position = vec3{2.0f, 2.0f, 2.0f};
-    camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
-    
-    mpRenderer renderer = nullptr;
-    mpVulkanInit(&renderer, &vulkanMemory, &windowData, &renderData, &callbacks);
-    
-    mpCameraControls cameraControls = {};
-    mpEventReceiver eventReceiver = {};
-    
-    mpFPSsampler fpsSampler = {1000,0,0};
     float timestep = 0.0f;
     int64_t lastCounter = 0, perfCountFrequency = 0;
     PlatformPrepareClock(&lastCounter, &perfCountFrequency);
     
-    windowData.running = true;
-    windowData.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
-    while(windowData.running)
+    engine.windowInfo.running = true;
+    engine.windowInfo.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
+    while(engine.windowInfo.running)
     {
-        PlatformPollEvents(&eventReceiver);
+        PlatformPollEvents(&engine.eventReceiver);
         
-        GetCurrentCameraControls(&eventReceiver, &cameraControls);
+        UpdateCameraControlState(&engine.eventReceiver, &engine.camControls);
         
-        if(cameraControls.rUp)
-            camera.pitch += camera.sensitivity * timestep;
-        else if(cameraControls.rDown)
-            camera.pitch -= camera.sensitivity * timestep;
-        if(cameraControls.rLeft)
-            camera.yaw += camera.sensitivity * timestep;
-        else if(cameraControls.rRight)
-            camera.yaw -= camera.sensitivity * timestep;
+        if(engine.camControls.rUp)
+            engine.camera.pitch += engine.camera.sensitivity * timestep;
+        else if(engine.camControls.rDown)
+            engine.camera.pitch -= engine.camera.sensitivity * timestep;
+        if(engine.camControls.rLeft)
+            engine.camera.yaw += engine.camera.sensitivity * timestep;
+        else if(engine.camControls.rRight)
+            engine.camera.yaw -= engine.camera.sensitivity * timestep;
         
-        if(camera.pitch > camera.pitchClamp)
-            camera.pitch = camera.pitchClamp;
-        else if(camera.pitch < -camera.pitchClamp)
-            camera.pitch = -camera.pitchClamp;
+        if(engine.camera.pitch > engine.camera.pitchClamp)
+            engine.camera.pitch = engine.camera.pitchClamp;
+        else if(engine.camera.pitch < -engine.camera.pitchClamp)
+            engine.camera.pitch = -engine.camera.pitchClamp;
         
-        vec3 front = {cosf(camera.pitch) * cosf(camera.yaw), cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch)};
-        vec3 left = {sinf(camera.yaw), -cosf(camera.yaw), 0.0f};
-        if(cameraControls.tForward)
-            camera.position += front * camera.speed * timestep;
-        else if(cameraControls.tBackward)
-            camera.position -= front * camera.speed * timestep;
-        if(cameraControls.tLeft)
-            camera.position -= left * camera.speed * timestep;
-        else if(cameraControls.tRight)
-            camera.position += left * camera.speed * timestep;
+        vec3 front = {cosf(engine.camera.pitch) * cosf(engine.camera.yaw), cosf(engine.camera.pitch) * sinf(engine.camera.yaw), sinf(engine.camera.pitch)};
+        vec3 left = {sinf(engine.camera.yaw), -cosf(engine.camera.yaw), 0.0f};
+        if(engine.camControls.tForward)
+            engine.camera.position += front * engine.camera.speed * timestep;
+        else if(engine.camControls.tBackward)
+            engine.camera.position -= front * engine.camera.speed * timestep;
+        if(engine.camControls.tLeft)
+            engine.camera.position -= left * engine.camera.speed * timestep;
+        else if(engine.camControls.tRight)
+            engine.camera.position += left * engine.camera.speed * timestep;
         
-        camera.view = LookAt(camera.position, camera.position + front, {0.0f, 0.0f, 1.0f});
-        camera.projection = Perspective(camera.fov, static_cast<float>(windowData.width) / static_cast<float>(windowData.height), 0.1f, 20.0f);
+        engine.camera.view = LookAt(engine.camera.position, engine.camera.position + front, {0.0f, 0.0f, 1.0f});
+        engine.camera.projection = Perspective(engine.camera.fov, static_cast<float>(engine.windowInfo.width) / static_cast<float>(engine.windowInfo.height), 0.1f, 40.0f);
         
-        mpVulkanUpdate(&renderer, &renderData, &camera, &windowData);
+        mpVulkanUpdate(&engine, &vulkanMemory);
         
-        windowData.hasResized = false;
-        ResetEventReceiver(&eventReceiver);
+        engine.windowInfo.hasResized = false;
+        ResetEventReceiver(&engine.eventReceiver);
         timestep = PlatformUpdateClock(&lastCounter, perfCountFrequency);
-        UpdateFpsSampler(&fpsSampler, timestep);
+        UpdateFpsSampler(&engine.fpsSampler, timestep);
     }
     
-    mpVulkanCleanup(&renderer, renderData.meshCount);
+    mpVulkanCleanup(&engine.rendererHandle, engine.renderData.meshCount);
     
-    for(uint32_t k = 0; k < renderData.meshCount; k++)
+    for(uint32_t k = 0; k < engine.renderData.meshCount; k++)
     {
-        mpDestroyChunkMesh(renderData.meshes[k]);
-        mpDestroyVoxelChunk(worldData.chunks[k]);
+        mpDestroyChunkMesh(engine.renderData.meshes[k]);
+        mpDestroyVoxelChunk(engine.worldData.chunks[k]);
     }
-    free(renderData.meshes);
-    free(worldData.chunks);
+    free(engine.renderData.meshes);
+    free(engine.worldData.chunks);
     
     mpDestroyMemoryArena(rendererArena);
     mpDestroyMemoryArena(transientArena);

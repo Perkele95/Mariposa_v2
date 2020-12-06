@@ -6,9 +6,9 @@
 #include "..\Vulkan\Include\vulkan\vulkan_win32.h"
 #endif
 
-void mpVulkanInit(mpRenderer *pRenderer, mpMemorySubdivision *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks);
-void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const mpCamera *const camera, const mpWindowData *const windowData);
-void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount);
+void mpVulkanInit(mpEngine *engine, mpMemorySubdivision *memory);
+void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory);
+void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount);
 
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
 

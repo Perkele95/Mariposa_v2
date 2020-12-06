@@ -1,7 +1,7 @@
 #include "VulkanLayer.h"
 #include <string.h>
 #include <stdio.h>
-
+// TODO: static global variables
 const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
@@ -204,8 +204,10 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     instanceInfo.enabledExtensionCount = arraysize(extensions);
     instanceInfo.ppEnabledExtensionNames = extensions;
     
+    MP_LOG_INFO
     for(uint32_t i = 0; i < extensionsCount; i++)
-        printf("Vk Extension %d: %s\n", i, extensionProperties[i].extensionName);
+        printf("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
+    MP_LOG_RESET
     
     free(extensionProperties);
     
@@ -532,13 +534,13 @@ static void PrepareShaderModules(mpVkRenderer *renderer, const mpCallbacks *cons
     VkShaderModuleCreateInfo shaderModuleInfo = {};
     shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shaderModuleInfo.codeSize = renderer->vertexShader.size;
-    shaderModuleInfo.pCode = (const uint32_t*)renderer->vertexShader.contents;
+    shaderModuleInfo.pCode = (const uint32_t*)renderer->vertexShader.handle;
     
     VkResult error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->vertShaderModule);
     mp_assert(!error);
     
     shaderModuleInfo.codeSize = renderer->fragmentShader.size;
-    shaderModuleInfo.pCode = (const uint32_t*)renderer->fragmentShader.contents;
+    shaderModuleInfo.pCode = (const uint32_t*)renderer->fragmentShader.handle;
     
     error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->fragShaderModule);
     mp_assert(!error);
@@ -816,7 +818,6 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
     
     for(uint32_t i = 0; i < renderData->meshCount; i++)
     {
-        // TODO: the size and data* already exists inside the meshes, use those instead
         VkDeviceSize vertbufferSize = renderData->meshes[i].verticesSize;
         VkDeviceSize indexbufferSize = renderData->meshes[i].indicesSize;
         VkBuffer vertStagingbuffer, indexStagingbuffer;
@@ -1000,24 +1001,23 @@ static bool32 CheckValidationLayerSupport(mpMemorySubdivision *memory)
             }
         }
     }
-    
     return layerFound;
 }
 
-void mpVulkanInit(mpRenderer *pRenderer, mpMemorySubdivision *memory, mpWindowData *windowData, const mpRenderData *renderData, const mpCallbacks *const callbacks)
+void mpVulkanInit(mpEngine *engine, mpMemorySubdivision *memory)
 {
-    *pRenderer = mpPushBackMemorySubdivision(memory, sizeof(mpVkRenderer));
-    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
+    engine->rendererHandle = mpPushBackMemorySubdivision(memory, sizeof(mpVkRenderer));
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(engine->rendererHandle);
     
     bool32 enableValidation = true;
     if(enableValidation && !CheckValidationLayerSupport(memory))
         printf("WARNING: Validation layers requested, but not available\n");
     
-    PrepareVkRenderer(renderer, enableValidation, callbacks);
-    PrepareVkSwapChain(renderer, memory, windowData->width, windowData->height);
+    PrepareVkRenderer(renderer, enableValidation, &engine->callbacks);
+    PrepareVkSwapChain(renderer, memory, engine->windowInfo.width, engine->windowInfo.height);
     
     PrepareVkRenderPass(renderer);
-    PrepareShaderModules(renderer, callbacks);
+    PrepareShaderModules(renderer, &engine->callbacks);
     PrepareVkPipeline(renderer);
     
     renderer->pFramebuffers =          reinterpret_cast<VkFramebuffer*>(  mpPushBackMemorySubdivision(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
@@ -1026,14 +1026,14 @@ void mpVulkanInit(mpRenderer *pRenderer, mpMemorySubdivision *memory, mpWindowDa
     renderer->pCommandbuffers =        reinterpret_cast<VkCommandBuffer*>(mpPushBackMemorySubdivision(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
     renderer->pInFlightImageFences =   reinterpret_cast<VkFence*>(        mpPushBackMemorySubdivision(memory, sizeof(VkFence) * renderer->swapChainImageCount));
     renderer->pDescriptorSets =        reinterpret_cast<VkDescriptorSet*>(mpPushBackMemorySubdivision(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderData->meshCount));
-    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderData->meshCount));
-    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
-    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderData->meshCount));
+    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * engine->renderData.meshCount));
+    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * engine->renderData.meshCount));
+    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * engine->renderData.meshCount));
+    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * engine->renderData.meshCount));
     
     PrepareVkFrameBuffers(renderer);
-    PrepareVkGeometryBuffers(renderer, renderData);
-    PrepareVkCommandbuffers(renderer, renderData);
+    PrepareVkGeometryBuffers(renderer, &engine->renderData);
+    PrepareVkCommandbuffers(renderer, &engine->renderData);
     PrepareVkSyncObjects(renderer);
 }
 
@@ -1087,11 +1087,11 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
     vkUnmapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex]);
 }
 
-void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const mpCamera *const camera, const mpWindowData *const windowData)
+void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory)
 {
-    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(engine->rendererHandle);
     
-    if(windowData->width == 0 || windowData->height == 0)
+    if(engine->windowInfo.width == 0 || engine->windowInfo.height == 0)
         return;
     
     vkWaitForFences(renderer->device, 1, &renderer->inFlightFences[renderer->currentFrame], VK_TRUE, UINT64MAX);
@@ -1100,7 +1100,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const
     VkResult imageResult = vkAcquireNextImageKHR(renderer->device, renderer->swapChain, UINT64MAX, renderer->imageAvailableSemaphores[renderer->currentFrame], VK_NULL_HANDLE, &imageIndex);
     if(imageResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        RecreateSwapChain(renderer, renderData, windowData->width, windowData->height);
+        RecreateSwapChain(renderer, &engine->renderData, engine->windowInfo.width, engine->windowInfo.height);
         return;
     }
     else if(imageResult != VK_SUCCESS && imageResult != VK_SUBOPTIMAL_KHR)
@@ -1108,7 +1108,7 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const
         printf("Failed to acquire swap chain image!");
     }
     
-    UpdateUBOs(renderer, camera, imageIndex);
+    UpdateUBOs(renderer, &engine->camera, imageIndex);
     
     if(renderer->pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(renderer->device, 1, &renderer->pInFlightImageFences[imageIndex], VK_TRUE, UINT64MAX);
@@ -1145,17 +1145,17 @@ void mpVulkanUpdate(mpRenderer *pRenderer, const mpRenderData *renderData, const
     presentInfo.pImageIndices = &imageIndex;
     
     VkResult presentResult = vkQueuePresentKHR(renderer->presentQueue, &presentInfo);
-    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || windowData->hasResized)
-        RecreateSwapChain(renderer, renderData, windowData->width, windowData->height);
+    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || engine->windowInfo.hasResized)
+        RecreateSwapChain(renderer, &engine->renderData, engine->windowInfo.width, engine->windowInfo.height);
     else if(presentResult != VK_SUCCESS)
         printf("Failed to present swap chain image!\n");
     
     renderer->currentFrame = (renderer->currentFrame + 1) % MP_MAX_IMAGES_IN_FLIGHT;
 }
 
-void mpVulkanCleanup(mpRenderer *pRenderer, uint32_t batchCount)
+void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount)
 {
-    mpVkRenderer *renderer = reinterpret_cast<mpVkRenderer*>(*pRenderer);
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*rendererHandle);
     
     CleanupSwapChain(renderer);
     

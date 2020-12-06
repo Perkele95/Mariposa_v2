@@ -57,33 +57,33 @@ void CreateWin32Surface(VkInstance instance, VkSurfaceKHR *surface)
     mp_assert(!error);
 }
 
-void Win32CloseFile(mpFileHandle *handle)
+void Win32CloseFile(mpFile *file)
 {
-    free(*handle);
+    free(file->handle);
 }
 
 mpFile Win32ReadFile(const char *filename)
 {
     mpFile result = {};
-    mpFileHandle fileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    mpHandle fileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     LARGE_INTEGER fileSize;
     
     if((fileHandle != INVALID_HANDLE_VALUE) && GetFileSizeEx(fileHandle, &fileSize))
     {
         mp_assert(fileSize.QuadPart < 0xFFFFFFFF);
         uint32_t fileSize32 = (uint32_t) fileSize.QuadPart;
-        result.contents = malloc((size_t)fileSize.QuadPart);
-        if(result.contents)
+        result.handle = malloc((size_t)fileSize.QuadPart);
+        if(result.handle)
         {
             DWORD bytesRead;
-            if(ReadFile(fileHandle, result.contents, fileSize32, &bytesRead, 0) && fileSize32 == bytesRead)
+            if(ReadFile(fileHandle, result.handle, fileSize32, &bytesRead, 0) && fileSize32 == bytesRead)
             {
                 result.size = fileSize32;
             }
             else
             {
-                free(result.contents);
-                result.contents = 0;
+                free(result.handle);
+                result.handle = 0;
             }
             
         }
@@ -95,11 +95,11 @@ mpFile Win32ReadFile(const char *filename)
 bool32 Win32WriteFile(const char *filename, mpFile *file)
 {
     bool32 result = false;
-    mpFileHandle fileHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    mpHandle fileHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
     if(fileHandle != INVALID_HANDLE_VALUE)
     {
         DWORD bytesWritten;
-        if(WriteFile(fileHandle, file->contents, file->size, &bytesWritten, 0))
+        if(WriteFile(fileHandle, file->handle, file->size, &bytesWritten, 0))
             result = (file->size == bytesWritten);
         
         CloseHandle(fileHandle);
