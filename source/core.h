@@ -73,7 +73,6 @@ struct mpVertex
 {
     vec3 position;
     vec3 colour;
-    vec3 normal;
 };
 
 struct mpMesh

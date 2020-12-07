@@ -26,13 +26,6 @@ static const vec3 _mpVoxelFaceSouth[]  = {voxVerts[3], voxVerts[4], voxVerts[7],
 static const vec3 _mpVoxelFaceEast[]   = {voxVerts[2], voxVerts[5], voxVerts[4], voxVerts[3]};
 static const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVerts[1]};
 
-static const vec3 _mpVoxelNormalTop =    {0.0f, 0.0f, 1.0f};
-static const vec3 _mpVoxelNormalBottom = {0.0f, 0.0f, -1.0f};
-static const vec3 _mpVoxelNormalNorth =  {1.0f, 0.0f, 0.0f};
-static const vec3 _mpVoxelNormalSouth =  {-1.0f, 0.0f, 0.0f};
-static const vec3 _mpVoxelNormalEast =   {0.0f, 1.0f, 0.0f};
-static const vec3 _mpVoxelNormalWest =   {0.0f, -1.0f, 0.0f};
-
 static const uint16_t _mpVoxelIndexStride = 6;
 static const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
 
@@ -127,8 +120,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_NORTH))
                 {
                     const mpVertex newNorthVertices[4] = {
-                        {_mpVoxelFaceNorth[0] + positionOffset, colour, _mpVoxelNormalNorth}, {_mpVoxelFaceNorth[1] + positionOffset, colour, _mpVoxelNormalNorth},
-                        {_mpVoxelFaceNorth[2] + positionOffset, colour, _mpVoxelNormalNorth}, {_mpVoxelFaceNorth[3] + positionOffset, colour, _mpVoxelNormalNorth}
+                        {_mpVoxelFaceNorth[0] + positionOffset, colour}, {_mpVoxelFaceNorth[1] + positionOffset, colour},
+                        {_mpVoxelFaceNorth[2] + positionOffset, colour}, {_mpVoxelFaceNorth[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newNorthVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -145,8 +138,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_SOUTH))
                 {
                     const mpVertex newSouthVertices[4] = {
-                        {_mpVoxelFaceSouth[0] + positionOffset, colour, _mpVoxelNormalSouth}, {_mpVoxelFaceSouth[1] + positionOffset, colour, _mpVoxelNormalSouth},
-                        {_mpVoxelFaceSouth[2] + positionOffset, colour, _mpVoxelNormalSouth}, {_mpVoxelFaceSouth[3] + positionOffset, colour, _mpVoxelNormalSouth}
+                        {_mpVoxelFaceSouth[0] + positionOffset, colour}, {_mpVoxelFaceSouth[1] + positionOffset, colour},
+                        {_mpVoxelFaceSouth[2] + positionOffset, colour}, {_mpVoxelFaceSouth[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newSouthVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -163,8 +156,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_EAST))
                 {
                     const mpVertex newEastVertices[4] = {
-                        {_mpVoxelFaceEast[0] + positionOffset, colour, _mpVoxelNormalEast}, {_mpVoxelFaceEast[1] + positionOffset, colour, _mpVoxelNormalEast},
-                        {_mpVoxelFaceEast[2] + positionOffset, colour, _mpVoxelNormalEast}, {_mpVoxelFaceEast[3] + positionOffset, colour, _mpVoxelNormalEast}
+                        {_mpVoxelFaceEast[0] + positionOffset, colour}, {_mpVoxelFaceEast[1] + positionOffset, colour},
+                        {_mpVoxelFaceEast[2] + positionOffset, colour}, {_mpVoxelFaceEast[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newEastVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -181,8 +174,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_WEST))
                 {
                     const mpVertex newWestVertices[4] = {
-                        {_mpVoxelFaceWest[0] + positionOffset, colour, _mpVoxelNormalWest}, {_mpVoxelFaceWest[1] + positionOffset, colour, _mpVoxelNormalWest},
-                        {_mpVoxelFaceWest[2] + positionOffset, colour, _mpVoxelNormalWest}, {_mpVoxelFaceWest[3] + positionOffset, colour, _mpVoxelNormalWest}
+                        {_mpVoxelFaceWest[0] + positionOffset, colour}, {_mpVoxelFaceWest[1] + positionOffset, colour},
+                        {_mpVoxelFaceWest[2] + positionOffset, colour}, {_mpVoxelFaceWest[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newWestVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -199,8 +192,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_TOP))
                 {
                     const mpVertex newTopVertices[4] = {
-                        {_mpVoxelFaceTop[0] + positionOffset, colour, _mpVoxelNormalTop}, {_mpVoxelFaceTop[1] + positionOffset, colour, _mpVoxelNormalTop},
-                        {_mpVoxelFaceTop[2] + positionOffset, colour, _mpVoxelNormalTop}, {_mpVoxelFaceTop[3] + positionOffset, colour, _mpVoxelNormalTop}
+                        {_mpVoxelFaceTop[0] + positionOffset, colour}, {_mpVoxelFaceTop[1] + positionOffset, colour},
+                        {_mpVoxelFaceTop[2] + positionOffset, colour}, {_mpVoxelFaceTop[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newTopVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -217,8 +210,8 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if(!(cullingFlags & VOXEL_CULLING_FLAG_BOTTOM))
                 {
                     const mpVertex newBottomVertices[4] = {
-                        {_mpVoxelFaceBottom[0] + positionOffset, colour, _mpVoxelNormalBottom}, {_mpVoxelFaceBottom[1] + positionOffset, colour, _mpVoxelNormalBottom},
-                        {_mpVoxelFaceBottom[2] + positionOffset, colour, _mpVoxelNormalBottom}, {_mpVoxelFaceBottom[3] + positionOffset, colour, _mpVoxelNormalBottom}
+                        {_mpVoxelFaceBottom[0] + positionOffset, colour}, {_mpVoxelFaceBottom[1] + positionOffset, colour},
+                        {_mpVoxelFaceBottom[2] + positionOffset, colour}, {_mpVoxelFaceBottom[3] + positionOffset, colour}
                     };
                     memcpy(tempBlockVertIncrementer, &newBottomVertices, sizeof(mpVertex) * 4);
                     const uint16_t newIndices[_mpVoxelIndexStride] = {
@@ -296,6 +289,7 @@ static void mpGenerateTerrain(mpVoxelChunk *chunk)
 {
     // TODO: Use seed as paremeter to be able to generate different worlds
     float heightMap = 0.0f, globalX = 0.0f, globalY = 0.0f;
+    
     for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
@@ -366,7 +360,7 @@ int main(int argc, char *argv[])
     mpVulkanInit(&engine, &vulkanMemory);
     
     engine.camera = {};
-    engine.camera.speed = 10.0f;
+    engine.camera.speed = 2.0f;
     engine.camera.sensitivity = 2.0f;
     engine.camera.fov = PI32 / 4.0f;
     engine.camera.model = Mat4x4Identity();
