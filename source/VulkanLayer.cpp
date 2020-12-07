@@ -567,15 +567,21 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     bindingDescription.stride = sizeof(mpVertex);
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
     
-    VkVertexInputAttributeDescription attributeDescs[2] = {};
+    VkVertexInputAttributeDescription attributeDescs[3] = {};
     attributeDescs[0].binding = 0;
-    attributeDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescs[0].location = 0;
+    attributeDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescs[0].offset = offsetof(mpVertex, position);
+    
     attributeDescs[1].binding = 0;
     attributeDescs[1].location = 1;
     attributeDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescs[1].offset = offsetof(mpVertex, colour);
+    
+    attributeDescs[2].binding = 0;
+    attributeDescs[2].location = 2;
+    attributeDescs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescs[2].offset = offsetof(mpVertex, normal);
     
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -936,7 +942,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         renderPassInfo.renderArea.extent = renderer->swapChainExtent;
         
         VkClearValue clearValues[2];
-        clearValues[0].color  = { 0.6f, 0.9f, 1.0f, 1.0f };
+        clearValues[0].color  = { 0.0f, 0.02f, 0.06f, 1.0f };
         clearValues[1].depthStencil = { 1.0f, 0 };
         renderPassInfo.clearValueCount = arraysize(clearValues);
         renderPassInfo.pClearValues = clearValues;
