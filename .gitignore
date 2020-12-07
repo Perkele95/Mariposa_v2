@@ -1,5 +1,4 @@
 data
-assets
 build
 vulkan
 stb_image
@@ -9,3 +8,4 @@ cmd.exe.lnk
 *.suo
 *.db
 *.ipch
+*.spv
