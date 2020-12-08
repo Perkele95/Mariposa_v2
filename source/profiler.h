@@ -1,59 +1,85 @@
 #pragma once
 
+/*
+ * 
+ */
+
+#ifdef PROFILER_ENABLE
 #include <stdint.h>
 #include <stdio.h>
-#include <Windows.h>
 
-struct profile_result
+static int32_t globalDbgCounter = 0;
+
+#define dbgGetID__(varName) ID##varName
+#define dbgGetID_(varName) dbgGetID__(varName)
+#define dbgGetID dbgGetID_(__LINE__)
+
+#define dbgMakeID static int32_t dbgGetID = globalDbgCounter++
+
+#define PROFILE_SCOPE__(num) dbgMakeID; timed_scope timedScope##num(dbgGetID, __FILE__, __LINE__, __FUNCTION__)
+#define PROFILE_SCOPE_(num) PROFILE_SCOPE__(num)
+#define PROFILE_SCOPE PROFILE_SCOPE_(__LINE__);
+
+struct dbg_record
 {
-    char* ID;
-    uint64_t CycleCount;
-    uint32_t HitCount;
+    char *fileName;
+    char *functionName;
+    uint32_t line;
+    uint32_t hitCount;
+    uint64_t cycleCount;
+    uint64_t oldCycleCount;
 };
 
-static profile_result ProfileResults[30] = {0};
-static uint32_t ProfilerCount = 0;
+static dbg_record dbgRecs[30] = {};
 
-#ifdef PROFILER_ENABLE
-static void _ProfilerPushBackResult(char* ID, uint64_t cycleCount)
+struct timed_scope
 {
-    for(uint32_t i = 0; i < ProfilerCount; i++)
+    dbg_record *record;
+    uint64_t newCycleCount;
+    
+    timed_scope(int32_t index, char *fileName, int32_t lineNumber, char *functionName)
     {
-        if(!strcmp(ProfileResults[i].ID, ID))
+        record = &dbgRecs[index];
+        record->fileName = fileName;
+        record->functionName = functionName;
+        record->line = lineNumber;
+        newCycleCount = __rdtsc();
+    }
+    
+    ~timed_scope()
+    {
+        record->cycleCount = __rdtsc() - newCycleCount;
+        record->hitCount++;
+    }
+};
+
+static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
+{
+    static uint32_t dbgSamplingCount = samplingLevel;
+    
+    if(dbgSamplingCount < samplingLevel)
+    {
+        for(int32_t i = 0; i < globalDbgCounter; i++)
         {
-            ProfileResults[i].CycleCount = cycleCount;
-            ProfileResults[i].HitCount++;
-            return;
+            dbgRecs[i].cycleCount = (dbgRecs[i].cycleCount + dbgRecs[i].oldCycleCount) / 2;
+            dbgRecs[i].oldCycleCount = dbgRecs[i].cycleCount;
+            dbgRecs[i].hitCount = 0;
         }
+        dbgSamplingCount++;
     }
-    ProfileResults[ProfilerCount] = {ID, cycleCount, 1};
-    ProfilerCount++;
-}
-#endif
-
-void PrintProfileResults()
-{
-#ifdef PROFILER_ENABLE
-    OutputDebugStringA("Profiler:\n");
-    for(uint32_t i = 0; i < ProfilerCount; i++)
+    else
     {
-        profile_result res = ProfileResults[i];
-        char buffer[256];
-        _snprintf_s(buffer, sizeof(buffer), "  %s: CycleCount = %zu, HitCount = %d\n", res.ID, res.CycleCount, res.HitCount);
-        OutputDebugStringA(buffer);
-        
-        ProfileResults[i].CycleCount = 0;
-        ProfileResults[i].HitCount = 0;
+        for(int32_t i = 0; i < globalDbgCounter; i++)
+        {
+            printf("File: %s, Func: %s, Line: %d, CycleCount: %zu, HitCount: %d\n",
+                dbgRecs[i].fileName, dbgRecs[i].functionName, dbgRecs[i].line, dbgRecs[i].cycleCount, dbgRecs[i].hitCount);
+            dbgRecs[i].oldCycleCount = dbgRecs[i].cycleCount;
+            dbgRecs[i].hitCount = 0;
+        }
+        dbgSamplingCount = 0;
     }
-#endif
 }
 
-#ifdef PROFILER_ENABLE
-    #define PROFILE_SCOPE_START(ID) uint64_t _cycle_counter##ID = __rdtsc();
-    #define PROFILE_SCOPE_END(ID) uint64_t _cycle_counter##ID##_result = __rdtsc() - _cycle_counter##ID; _ProfilerPushBackResult(#ID, _cycle_counter##ID##_result);
 #else
-    #define PROFILE_SCOPE_START(ID)
-    #define PROFILE_SCOPE_END(ID)
-    #define PROFILE_FUNCTION_START
-    #define PROFILE_FUNCTION_END
+#define PROFILE_SCOPE
 #endif

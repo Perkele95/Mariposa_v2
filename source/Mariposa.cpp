@@ -1,6 +1,7 @@
 #include "core.h"
 #include "Win32_Mariposa.h"
 #include "VulkanLayer.h"
+#include "profiler.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -387,6 +388,7 @@ int main(int argc, char *argv[])
     engine.windowInfo.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
     while(engine.windowInfo.running)
     {
+        PROFILE_SCOPE
         PlatformPollEvents(&engine.eventReceiver);
         
         UpdateCameraControlState(&engine.eventReceiver, &engine.camControls);
@@ -425,7 +427,8 @@ int main(int argc, char *argv[])
         ResetEventReceiver(&engine.eventReceiver);
         timestep = PlatformUpdateClock(&lastCounter, perfCountFrequency);
         UpdateFpsSampler(&engine.fpsSampler, timestep);
-    }
+        mpDbgProcessSampledRecords(5000);
+    }    
     
     mpVulkanCleanup(&engine.rendererHandle, engine.renderData.meshCount);
     

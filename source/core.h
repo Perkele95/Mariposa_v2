@@ -10,7 +10,6 @@
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
 
-#include "logger.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,7 +19,10 @@
     #define mp_assert(Expression)
 #else
     #define mp_assert(Expression) if(!(Expression)) {DebugBreak();}
+    #define PROFILER_ENABLE
 #endif
+
+#include "logger.h"
 
 #define UINT64MAX 0xFFFFFFFFFFFFFFFF
 #define PI32 3.14159265359f
@@ -39,7 +41,7 @@ typedef void* mpHandle;
 struct mpWindowData
 {
     int32_t width, height;
-    bool32 hasResized, running;
+    volatile bool32 hasResized, running;
 };
 
 struct mpFile
