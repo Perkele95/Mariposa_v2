@@ -1,7 +1,8 @@
 #pragma once
 
+#include "logger.h"
 #include <stdint.h>
-#include <stdlib.h>
+#include <stdio.h>
 #include <cstring>
 
 struct mpMemoryArena
@@ -49,7 +50,9 @@ inline mpMemorySubdivision mpSubdivideMemoryArena(mpMemoryArena *arena, size_t s
     }
     else
     {
-        // TODO: Print runtime error
+        MP_LOG_ERROR
+        printf("MEMORY ERROR: Subdivision request denied; not enough space in arena");
+        MP_LOG_RESET
     }
     return subDiv;
 }
@@ -64,7 +67,9 @@ inline uint8_t* mpPushBackMemorySubdivision(mpMemorySubdivision *subDiv, size_t 
     }
     else
     {
-        // TODO: Print runtime error
+        MP_LOG_ERROR
+        printf("MEMORY ERROR: Subdivision push denied; not enough space in subdivision");
+        MP_LOG_RESET
     }
     return bytePtr;
 }

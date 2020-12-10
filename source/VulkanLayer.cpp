@@ -824,6 +824,9 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
     
     for(uint32_t i = 0; i < renderData->meshCount; i++)
     {
+        if(renderData->meshes[i].isEmpty)
+            continue;
+        
         VkDeviceSize vertbufferSize = renderData->meshes[i].verticesSize;
         VkDeviceSize indexbufferSize = renderData->meshes[i].indicesSize;
         VkBuffer vertStagingbuffer, indexStagingbuffer;
@@ -956,6 +959,9 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         
         for(uint32_t k = 0; k < renderData->meshCount; k++)
         {
+            if(renderData->meshes[k].isEmpty)
+                continue;
+            
             vkCmdBindVertexBuffers(renderer->pCommandbuffers[i], 0, 1, &renderer->vertexbuffers[k], offsets);
             vkCmdBindIndexBuffer(renderer->pCommandbuffers[i], renderer->indexbuffers[k], 0, VK_INDEX_TYPE_UINT16);
             vkCmdDrawIndexed(renderer->pCommandbuffers[i], renderData->meshes[k].indexCount, 1, 0, 0, 0);

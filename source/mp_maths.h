@@ -379,3 +379,10 @@ inline float Perlin(float x, float y)
     float result = _lerp(ix0, ix1, sy);
     return result;
 }
+
+// ------
+// Map/grid related stuff
+struct grid3
+{
+    int32_t x,y,z;
+};

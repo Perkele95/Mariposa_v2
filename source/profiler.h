@@ -74,6 +74,7 @@ static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
             printf("File: %s, Func: %s, Line: %d, CycleCount: %zu, HitCount: %d\n",
                 dbgRecs[i].fileName, dbgRecs[i].functionName, dbgRecs[i].line, dbgRecs[i].cycleCount, dbgRecs[i].hitCount);
             dbgRecs[i].oldCycleCount = dbgRecs[i].cycleCount;
+            dbgRecs[i].cycleCount = 0;
             dbgRecs[i].hitCount = 0;
         }
         dbgSamplingCount = 0;

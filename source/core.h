@@ -4,12 +4,10 @@
 #include <cstring>
 #include "..\Vulkan\Include\vulkan\vulkan.h"
 #include "mp_maths.h"
-#include "memory.h"
 #include "events.h"
 
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
-
 
 #ifdef _WIN32
 #include <windows.h>
@@ -22,6 +20,7 @@
     #define PROFILER_ENABLE
 #endif
 
+#include "memory.h"
 #include "logger.h"
 
 #define UINT64MAX 0xFFFFFFFFFFFFFFFF
@@ -41,7 +40,7 @@ typedef void* mpHandle;
 struct mpWindowData
 {
     int32_t width, height;
-    volatile bool32 hasResized, running;
+    bool32 hasResized, running;
 };
 
 struct mpFile
@@ -52,7 +51,7 @@ struct mpFile
 
 struct mpCallbacks
 {
-    void (*GetSurface)(VkInstance instance, VkSurfaceKHR *surface);// TODO: REPLACE
+    void (*GetSurface)(VkInstance instance, VkSurfaceKHR *surface);
     // FILE IO
     void (*mpCloseFile)(mpFile *file);
     mpFile (*mpReadFile)(const char *filename);
@@ -61,7 +60,7 @@ struct mpCallbacks
 
 struct mpThreadContext
 {
-    int placeholder;
+    int32_t placeholder;
 };
 
 struct mpFPSsampler
@@ -85,6 +84,7 @@ struct mpMesh
     size_t verticesSize;
     size_t indicesSize;
     uint32_t indexCount;
+    bool32 isEmpty;
 };
 
 struct mpRenderData
@@ -102,10 +102,32 @@ enum mpVoxelType
     Voxel_Type_MAX,
 };
 
+enum mpVoxelFlags
+{
+    VOXEL_FLAG_ACTIVE      = 0x0001,
+    VOXEL_FLAG_DRAW_TOP    = 0x0002,
+    VOXEL_FLAG_DRAW_BOTTOM = 0x0004,
+    VOXEL_FLAG_DRAW_NORTH  = 0x0008,
+    VOXEL_FLAG_DRAW_SOUTH  = 0x0010,
+    VOXEL_FLAG_DRAW_EAST   = 0x0020,
+    VOXEL_FLAG_DRAW_WEST   = 0x0040,
+};
+
+enum mpChunkFlags
+{
+    CHUNK_FLAG_IS_EMPTY         = 0x0001,
+    CHUNK_FLAG_NEIGHBOUR_NORTH  = 0x0002,
+    CHUNK_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
+    CHUNK_FLAG_NEIGHBOUR_TOP    = 0x0008,
+    CHUNK_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
+    CHUNK_FLAG_NEIGHBOUR_EAST   = 0x0020,
+    CHUNK_FLAG_NEIGHBOUR_WEST   = 0x0040,
+};
+
 struct mpVoxelBlock
 {
     mpVoxelType type;
-    bool32 isActive;
+    uint32_t flags;
 };
 
 struct mpVoxelChunk
@@ -113,6 +135,14 @@ struct mpVoxelChunk
     mpVoxelBlock ***pBlocks;
     uint32_t size;
     vec3 position;
+    
+    uint32_t flags;
+    mpVoxelChunk *northNeighbour;
+    mpVoxelChunk *southNeighbour;
+    mpVoxelChunk *topNeighbour;
+    mpVoxelChunk *bottomNeighbour;
+    mpVoxelChunk *eastNeighbour;
+    mpVoxelChunk *westNeighbour;
 };
 
 struct mpWorldData

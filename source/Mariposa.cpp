@@ -75,16 +75,6 @@ inline static void mpDestroyVoxelChunk(mpVoxelChunk chunk)
 // TODO: Function needs to be cleaned up after verification
 static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
 {
-    enum mpVoxelCullingFlagBits
-    {
-        VOXEL_CULLING_FLAG_TOP = 0x0001,
-        VOXEL_CULLING_FLAG_BOTTOM = 0x0002,
-        VOXEL_CULLING_FLAG_NORTH = 0x0004,
-        VOXEL_CULLING_FLAG_SOUTH = 0x0008,
-        VOXEL_CULLING_FLAG_EAST = 0x0010,
-        VOXEL_CULLING_FLAG_WEST = 0x0020,
-    };
-    
     uint16_t vertexCount = 0, indexCount = 0;
     
     const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
@@ -101,31 +91,17 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
             {
-                if(chunk->pBlocks[x][y][z].isActive == false)
+                uint32_t drawFlags = chunk->pBlocks[x][y][z].flags;
+                if((drawFlags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
-                // TODO: set indices
-                vec3 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
-                uint32_t cullingFlags = 0;
-                if(x > 0 && chunk->pBlocks[x - 1][y][z].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_SOUTH;
-                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x + 1][y][z].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_NORTH;
-                
-                if(y > 0 && chunk->pBlocks[x][y - 1][z].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_WEST;
-                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x][y + 1][z].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_EAST;
-                
-                if(z > 0 && chunk->pBlocks[x][y][z - 1].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_BOTTOM;
-                if(x < (MP_CHUNK_SIZE - 1) && chunk->pBlocks[x][y][z + 1].isActive)
-                    cullingFlags |= VOXEL_CULLING_FLAG_TOP;
                 
                 vec3 positionOffset = {};
                 positionOffset.X = static_cast<float>(x) + chunk->position.X;
                 positionOffset.Y = static_cast<float>(y) + chunk->position.Y;
                 positionOffset.Z = static_cast<float>(z) + chunk->position.Z;
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_NORTH))
+                vec3 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
+                
+                if(drawFlags & VOXEL_FLAG_DRAW_NORTH)
                 {
                     const mpVertex newNorthVertices[4] = {
                         {_mpVoxelFaceNorth[0] + positionOffset, colour, _mpVoxelNormalNorth}, {_mpVoxelFaceNorth[1] + positionOffset, colour, _mpVoxelNormalNorth},
@@ -143,7 +119,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_SOUTH))
+                if(drawFlags & VOXEL_FLAG_DRAW_SOUTH)
                 {
                     const mpVertex newSouthVertices[4] = {
                         {_mpVoxelFaceSouth[0] + positionOffset, colour, _mpVoxelNormalSouth}, {_mpVoxelFaceSouth[1] + positionOffset, colour, _mpVoxelNormalSouth},
@@ -161,7 +137,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_EAST))
+                if(drawFlags & VOXEL_FLAG_DRAW_EAST)
                 {
                     const mpVertex newEastVertices[4] = {
                         {_mpVoxelFaceEast[0] + positionOffset, colour, _mpVoxelNormalEast}, {_mpVoxelFaceEast[1] + positionOffset, colour, _mpVoxelNormalEast},
@@ -179,7 +155,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_WEST))
+                if(drawFlags & VOXEL_FLAG_DRAW_WEST)
                 {
                     const mpVertex newWestVertices[4] = {
                         {_mpVoxelFaceWest[0] + positionOffset, colour, _mpVoxelNormalWest}, {_mpVoxelFaceWest[1] + positionOffset, colour, _mpVoxelNormalWest},
@@ -197,7 +173,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_TOP))
+                if(drawFlags & VOXEL_FLAG_DRAW_TOP)
                 {
                     const mpVertex newTopVertices[4] = {
                         {_mpVoxelFaceTop[0] + positionOffset, colour, _mpVoxelNormalTop}, {_mpVoxelFaceTop[1] + positionOffset, colour, _mpVoxelNormalTop},
@@ -215,7 +191,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                     indexCount += _mpVoxelIndexStride;
                     vertexCount += 4;
                 }
-                if(!(cullingFlags & VOXEL_CULLING_FLAG_BOTTOM))
+                if(drawFlags & VOXEL_FLAG_DRAW_BOTTOM)
                 {
                     const mpVertex newBottomVertices[4] = {
                         {_mpVoxelFaceBottom[0] + positionOffset, colour, _mpVoxelNormalBottom}, {_mpVoxelFaceBottom[1] + positionOffset, colour, _mpVoxelNormalBottom},
@@ -237,11 +213,12 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
         }
     }
     mpMesh mesh = {};
-    mesh.verticesSize = static_cast<size_t>(vertexCount) * sizeof(mpVertex);
-    mesh.indicesSize = static_cast<size_t>(indexCount) * sizeof(uint16_t);
+    mesh.verticesSize = vertexCount * sizeof(mpVertex);
+    mesh.indicesSize = indexCount * sizeof(uint16_t);
     mesh.vertices = static_cast<mpVertex*>(malloc(mesh.verticesSize));
     mesh.indices = static_cast<uint16_t*>(malloc(mesh.indicesSize));
     mesh.indexCount = indexCount;
+    mesh.isEmpty = !(vertexCount && indexCount);
     
     memcpy(mesh.vertices, tempBlockVertices, mesh.verticesSize);
     memcpy(mesh.indices, tempBlockIndices, mesh.indicesSize);
@@ -257,12 +234,182 @@ inline static void mpDestroyChunkMesh(mpMesh mesh)
     free(mesh.indices);
 }
 
+static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
+{
+    // TODO: Use seed as paremeter to be able to generate different worlds
+    float heightMap = 0.0f, globalX = 0.0f, globalY = 0.0f;
+    
+    for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
+        for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
+            for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
+            {
+                globalX = chunk.position.X + static_cast<float>(x);
+                globalY = chunk.position.Y + static_cast<float>(y);
+                
+                heightMap = Perlin(globalX / 100.0f, globalY / 100.0f);
+                heightMap *= 400.0f;
+                
+                if(static_cast<float>(z) <= heightMap)
+                {
+                    chunk.pBlocks[x][y][z].flags = VOXEL_FLAG_ACTIVE;
+                    chunk.pBlocks[x][y][z].type = Voxel_Type_Grass;
+                }
+            }
+        }
+    }
+    return chunk;
+}
+// Loops through all blocks in a chunk and decides which faces need to be drawn based on neighbours active status
+static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
+{
+    uint32_t max = MP_CHUNK_SIZE - 1;
+    bool32 localCheck = 0;
+    
+    for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
+        for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
+            for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
+            {
+                mpVoxelBlock currentBlock = chunk.pBlocks[x][y][z];
+                if((currentBlock.flags & VOXEL_FLAG_ACTIVE) == false)
+                    continue;
+                
+                localCheck = x > 0 && (chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
+                    localCheck |= chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_SOUTH;
+                
+                localCheck = x < max && (chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
+                    localCheck |= chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_NORTH;
+                
+                localCheck = y < max && (chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
+                    localCheck |= chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
+                
+                localCheck = y > 0 && (chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
+                    localCheck |= chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_WEST;
+                
+                localCheck = z > 0 && (chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
+                    localCheck |= chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_BOTTOM;
+                
+                localCheck = z < max && (chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE);
+                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
+                    localCheck |= chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_TOP;
+                
+                chunk.pBlocks[x][y][z] = currentBlock;
+            }
+        }
+    }
+    return chunk;
+}
+
+static mpWorldData mpGenerateWorldData()
+{
+    const grid3 worldSize = {3, 3, 1};
+    
+    mpWorldData worldData = {};
+    worldData.chunkCount = worldSize.x * worldSize.y * worldSize.z;
+    // This looks fugly, use memory arena instead
+    worldData.chunks = static_cast<mpVoxelChunk*>(malloc(sizeof(mpVoxelChunk) * worldData.chunkCount));
+    
+    vec3 pos = {};
+    
+    for(uint32_t i = 0; i < worldData.chunkCount; i++)
+    {
+        worldData.chunks[i] = mpCreateVoxelChunk();
+        worldData.chunks[i].position = pos * MP_CHUNK_SIZE;
+        worldData.chunks[i] = mpGenerateChunkTerrain(worldData.chunks[i]);
+        // TODO: Clean up these if statements somehow. Perhaps sneak in a ternary operator?
+        if(pos.X > 0)
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_SOUTH;
+            worldData.chunks[i].southNeighbour = &worldData.chunks[i - 1];
+        }
+        if(pos.X < (worldSize.x - 1))
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_NORTH;
+            worldData.chunks[i].northNeighbour = &worldData.chunks[i + 1];
+        }
+        if(pos.Y > 0)
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_WEST;
+            worldData.chunks[i].westNeighbour = &worldData.chunks[i - worldSize.x];
+        }
+        if(pos.Y < (worldSize.y - 1))
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_EAST;
+            worldData.chunks[i].eastNeighbour = &worldData.chunks[i + worldSize.x];
+        }
+        if(pos.Z > 0)
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_BOTTOM;
+            worldData.chunks[i].topNeighbour = &worldData.chunks[i - (worldSize.x * worldSize.y)];
+        }
+        if(pos.Z < (worldSize.z - 1))
+        {
+            worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_TOP;
+            worldData.chunks[i].bottomNeighbour = &worldData.chunks[i + (worldSize.x * worldSize.y)];
+        }
+        // TODO: clean this up as well
+        pos.X++;
+        if(pos.X == worldSize.x)
+        {
+            pos.X = 0;
+            pos.Y++;
+            if(pos.Y == worldSize.y)
+            {
+                pos.Y = 0;
+                pos.Z++;
+            }
+        }
+    }
+    pos = {};
+    for(uint32_t i = 0; i < worldData.chunkCount; i++)
+    {
+        worldData.chunks[i] = mpSetDrawFlags(worldData.chunks[i]);
+        // TODO: clean this up as well
+        pos.X++;
+        if(pos.X == worldSize.x)
+        {
+            pos.X = 0;
+            pos.Y++;
+            if(pos.Y == worldSize.y)
+            {
+                pos.Y = 0;
+                pos.Z++;
+            }
+        }
+    }
+    
+    return worldData;
+}
+
+static mpRenderData mpGenerateRenderData(const mpWorldData *worldData)
+{
+    mpRenderData renderData = {};
+    
+    renderData.meshCount = worldData->chunkCount;
+    renderData.meshes = static_cast<mpMesh*>(malloc(sizeof(mpMesh) * renderData.meshCount));
+    
+    for(uint32_t i = 0; i < renderData.meshCount; i++)
+        renderData.meshes[i] = mpCreateChunkMesh(&worldData->chunks[i]);
+    
+    return renderData;
+}
+
 inline static void ProcessKeyToCameraControl(const mpEventReceiver *receiver, mpKeyEvent key, bool32 *controlValue)
 {
     if(receiver->keyPressedEvents & key)
-        (*controlValue) = true;
+        *controlValue = true;
     else if(receiver->keyReleasedEvents & key)
-        (*controlValue) = false;
+        *controlValue = false;
 }
 
 static void UpdateCameraControlState(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
@@ -293,59 +440,6 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
     }
 }
 
-static void mpGenerateTerrain(mpVoxelChunk *chunk)
-{
-    // TODO: Use seed as paremeter to be able to generate different worlds
-    float heightMap = 0.0f, globalX = 0.0f, globalY = 0.0f;
-    for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++){
-        for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
-            for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
-            {
-                globalX = chunk->position.X + static_cast<float>(x);
-                globalY = chunk->position.Y + static_cast<float>(y);
-                
-                heightMap = Perlin(globalX / 100.0f, globalY / 100.0f);
-                heightMap *= 400.0f;
-                
-                if(static_cast<float>(z) <= heightMap)
-                {
-                    chunk->pBlocks[x][y][z].isActive = true;
-                    chunk->pBlocks[x][y][z].type = Voxel_Type_Grass;
-                }
-            }
-        }
-    }
-}
-
-static mpWorldData mpGenerateWorldData()
-{
-    mpWorldData worldData = {};
-    worldData.chunkCount = 2;
-    worldData.chunks = static_cast<mpVoxelChunk*>(malloc(sizeof(mpVoxelChunk) * worldData.chunkCount));
-    
-    for(uint32_t i = 0; i < worldData.chunkCount; i++)
-    {
-        worldData.chunks[i] = mpCreateVoxelChunk();
-        worldData.chunks[i].position.X = static_cast<float>(i * MP_CHUNK_SIZE);
-        mpGenerateTerrain(&worldData.chunks[i]);
-    }
-    
-    return worldData;
-}
-
-static mpRenderData mpGenerateRenderData(const mpWorldData *worldData)
-{
-    mpRenderData renderData = {};
-    
-    renderData.meshCount = worldData->chunkCount;
-    renderData.meshes = static_cast<mpMesh*>(malloc(sizeof(mpMesh) * renderData.meshCount));
-    
-    for(uint32_t i = 0; i < renderData.meshCount; i++)
-        renderData.meshes[i] = mpCreateChunkMesh(&worldData->chunks[i]);
-    
-    return renderData;
-}
-
 int main(int argc, char *argv[])
 {
     mpEngine engine = {};
@@ -360,7 +454,7 @@ int main(int argc, char *argv[])
     mpMemoryArena transientArena = mpCreateMemoryArena(MegaBytes(64));
     mpMemorySubdivision vulkanMemory = mpSubdivideMemoryArena(&rendererArena, MegaBytes(1));
     
-    // TODO: use memory arena here
+    // TODO: use memory for these bits of data
     engine.worldData = mpGenerateWorldData();
     engine.renderData = mpGenerateRenderData(&engine.worldData);
     
@@ -419,7 +513,7 @@ int main(int argc, char *argv[])
             engine.camera.position += left * engine.camera.speed * timestep;
         
         engine.camera.view = LookAt(engine.camera.position, engine.camera.position + front, {0.0f, 0.0f, 1.0f});
-        engine.camera.projection = Perspective(engine.camera.fov, static_cast<float>(engine.windowInfo.width) / static_cast<float>(engine.windowInfo.height), 0.1f, 40.0f);
+        engine.camera.projection = Perspective(engine.camera.fov, static_cast<float>(engine.windowInfo.width) / static_cast<float>(engine.windowInfo.height), 0.1f, 100.0f);
         
         mpVulkanUpdate(&engine, &vulkanMemory);
         
