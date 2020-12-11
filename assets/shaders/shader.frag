@@ -2,8 +2,8 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(location = 0) in vec3 fragPosition;
-layout(location = 1) in vec3 fragColour;
-layout(location = 2) in vec3 fragNormal;
+layout(location = 1) in vec3 fragNormal;
+layout(location = 2) in vec4 fragColour;
 layout(location = 3) in vec3 lightPos;
 layout(location = 4) in vec3 lightColour;
 
@@ -18,6 +18,6 @@ void main()
 	vec3 diffuse = diff * lightColour;
 	vec3 ambient = vec3(0.2, 0.2, 0.2);
 	
-	vec3 result = (ambient + diffuse) * fragColour;
-	outColor = vec4(result, 1.0);
+	vec3 result = ambient + diffuse;
+	outColor = vec4(result, 1.0) * fragColour;
 }

@@ -8,43 +8,10 @@
 
 #define MP_CHUNK_SIZE 16
 #define MP_VOXEL_SCALE 0.5f
-// TODO: static global variables
-// Full cube vertex positions
-static const vec3 voxVerts[8] = {
-    {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
-    { MP_VOXEL_SCALE, -MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
-    { MP_VOXEL_SCALE,  MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
-    {-MP_VOXEL_SCALE,  MP_VOXEL_SCALE,  MP_VOXEL_SCALE},
-    {-MP_VOXEL_SCALE,  MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
-    { MP_VOXEL_SCALE,  MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
-    { MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
-    {-MP_VOXEL_SCALE, -MP_VOXEL_SCALE, -MP_VOXEL_SCALE},
-};
-static const vec3 _mpVoxelFaceTop[]    = {voxVerts[0], voxVerts[1], voxVerts[2], voxVerts[3]};
-static const vec3 _mpVoxelFaceBottom[] = {voxVerts[4], voxVerts[5], voxVerts[6], voxVerts[7]};
-static const vec3 _mpVoxelFaceNorth[]  = {voxVerts[1], voxVerts[6], voxVerts[5], voxVerts[2]};
-static const vec3 _mpVoxelFaceSouth[]  = {voxVerts[3], voxVerts[4], voxVerts[7], voxVerts[0]};
-static const vec3 _mpVoxelFaceEast[]   = {voxVerts[2], voxVerts[5], voxVerts[4], voxVerts[3]};
-static const vec3 _mpVoxelFaceWest[]   = {voxVerts[0], voxVerts[7], voxVerts[6], voxVerts[1]};
 
-static const vec3 _mpVoxelNormalTop =    {0.0f, 0.0f, 1.0f};
-static const vec3 _mpVoxelNormalBottom = {0.0f, 0.0f, -1.0f};
-static const vec3 _mpVoxelNormalNorth =  {1.0f, 0.0f, 0.0f};
-static const vec3 _mpVoxelNormalSouth =  {-1.0f, 0.0f, 0.0f};
-static const vec3 _mpVoxelNormalEast =   {0.0f, 1.0f, 0.0f};
-static const vec3 _mpVoxelNormalWest =   {0.0f, -1.0f, 0.0f};
+static uint32_t quadCount = 0;
 
-static const uint16_t _mpVoxelIndexStride = 6;
-static const uint16_t _mpVoxelIndices[_mpVoxelIndexStride] = {0, 1, 2, 2, 3, 0};
-
-static const vec3 _mpBlockColours[Voxel_Type_MAX] = {
-    {0.0f, 0.0f, 0.0f},
-    {0.0f, 1.0f, 0.2f},
-    {0.5f, 0.4f, 0.2f},
-    {0.4f, 0.4f, 0.4f},
-};
-
-static mpVoxelChunk mpCreateVoxelChunk()
+static mpVoxelChunk mpAllocateChunk()
 {
     size_t chunkSize3x = MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
     mpVoxelChunk chunk = {};
@@ -72,9 +39,101 @@ inline static void mpDestroyVoxelChunk(mpVoxelChunk chunk)
     free(chunk.pBlocks);
 }
 
+static mpQuad mpCreateQuadNorth(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalNorth =  {1.0f, 0.0f, 0.0f};
+    quad.vertices[0] = {vec3{ scale, -scale,  scale} + offset, normalNorth, colour};
+    quad.vertices[1] = {vec3{ scale, -scale, -scale} + offset, normalNorth, colour};
+    quad.vertices[2] = {vec3{ scale,  scale, -scale} + offset, normalNorth, colour};
+    quad.vertices[3] = {vec3{ scale,  scale,  scale} + offset, normalNorth, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
+static mpQuad mpCreateQuadSouth(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalSouth =  {-1.0f, 0.0f, 0.0f};
+    quad.vertices[0] = {vec3{-scale,  scale,  scale} + offset, normalSouth, colour};
+    quad.vertices[1] = {vec3{-scale,  scale, -scale} + offset, normalSouth, colour};
+    quad.vertices[2] = {vec3{-scale, -scale, -scale} + offset, normalSouth, colour};
+    quad.vertices[3] = {vec3{-scale, -scale,  scale} + offset, normalSouth, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
+static mpQuad mpCreateQuadEast(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalEast =  {0.0f, 1.0f, 0.0f};
+    quad.vertices[0] = {vec3{ scale,  scale,  scale} + offset, normalEast, colour};
+    quad.vertices[1] = {vec3{ scale,  scale, -scale} + offset, normalEast, colour};
+    quad.vertices[2] = {vec3{-scale,  scale, -scale} + offset, normalEast, colour};
+    quad.vertices[3] = {vec3{-scale,  scale,  scale} + offset, normalEast, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
+static mpQuad mpCreateQuadWest(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalWest =  {0.0f, -1.0f, 0.0f};
+    quad.vertices[0] = {vec3{-scale, -scale,  scale} + offset, normalWest, colour};
+    quad.vertices[1] = {vec3{-scale, -scale, -scale} + offset, normalWest, colour};
+    quad.vertices[2] = {vec3{ scale, -scale, -scale} + offset, normalWest, colour};
+    quad.vertices[3] = {vec3{ scale, -scale,  scale} + offset, normalWest, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
+static mpQuad mpCreateQuadTop(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalTop = {0.0f, 0.0f, 1.0f};
+    quad.vertices[0] = {vec3{-scale, -scale,  scale} + offset, normalTop, colour};
+    quad.vertices[1] = {vec3{ scale, -scale,  scale} + offset, normalTop, colour};
+    quad.vertices[2] = {vec3{ scale,  scale,  scale} + offset, normalTop, colour};
+    quad.vertices[3] = {vec3{-scale,  scale,  scale} + offset, normalTop, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
+static mpQuad mpCreateQuadBottom(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad = {};
+    const vec3 normalBottom =  {0.0f, 0.0f, -1.0f};
+    quad.vertices[0] = {vec3{-scale,  scale, -scale} + offset, normalBottom, colour};
+    quad.vertices[1] = {vec3{ scale,  scale, -scale} + offset, normalBottom, colour};
+    quad.vertices[2] = {vec3{ scale, -scale, -scale} + offset, normalBottom, colour};
+    quad.vertices[3] = {vec3{-scale, -scale, -scale} + offset, normalBottom, colour};
+    const uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
+    for(uint16_t index = 0; index < 6; index++)
+        quad.indices[index] = quadIndices[index] + indexOffset;
+    
+    return quad;
+}
+
 // TODO: Function needs to be cleaned up after verification
 static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
 {
+    const uint16_t vertexStride = 4;
+    const uint16_t indexStride = 6;
     uint16_t vertexCount = 0, indexCount = 0;
     
     const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
@@ -95,119 +154,90 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk)
                 if((drawFlags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
                 
-                vec3 positionOffset = {};
-                positionOffset.X = static_cast<float>(x) + chunk->position.X;
-                positionOffset.Y = static_cast<float>(y) + chunk->position.Y;
-                positionOffset.Z = static_cast<float>(z) + chunk->position.Z;
-                vec3 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
+                const vec4 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
+                const vec3 positionOffset = {
+                    static_cast<float>(x) + chunk->position.x,
+                    static_cast<float>(y) + chunk->position.y,
+                    static_cast<float>(z) + chunk->position.z,
+                };
                 
                 if(drawFlags & VOXEL_FLAG_DRAW_NORTH)
                 {
-                    const mpVertex newNorthVertices[4] = {
-                        {_mpVoxelFaceNorth[0] + positionOffset, colour, _mpVoxelNormalNorth}, {_mpVoxelFaceNorth[1] + positionOffset, colour, _mpVoxelNormalNorth},
-                        {_mpVoxelFaceNorth[2] + positionOffset, colour, _mpVoxelNormalNorth}, {_mpVoxelFaceNorth[3] + positionOffset, colour, _mpVoxelNormalNorth}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newNorthVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadNorth(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_SOUTH)
                 {
-                    const mpVertex newSouthVertices[4] = {
-                        {_mpVoxelFaceSouth[0] + positionOffset, colour, _mpVoxelNormalSouth}, {_mpVoxelFaceSouth[1] + positionOffset, colour, _mpVoxelNormalSouth},
-                        {_mpVoxelFaceSouth[2] + positionOffset, colour, _mpVoxelNormalSouth}, {_mpVoxelFaceSouth[3] + positionOffset, colour, _mpVoxelNormalSouth}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newSouthVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadSouth(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_EAST)
                 {
-                    const mpVertex newEastVertices[4] = {
-                        {_mpVoxelFaceEast[0] + positionOffset, colour, _mpVoxelNormalEast}, {_mpVoxelFaceEast[1] + positionOffset, colour, _mpVoxelNormalEast},
-                        {_mpVoxelFaceEast[2] + positionOffset, colour, _mpVoxelNormalEast}, {_mpVoxelFaceEast[3] + positionOffset, colour, _mpVoxelNormalEast}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newEastVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadEast(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_WEST)
                 {
-                    const mpVertex newWestVertices[4] = {
-                        {_mpVoxelFaceWest[0] + positionOffset, colour, _mpVoxelNormalWest}, {_mpVoxelFaceWest[1] + positionOffset, colour, _mpVoxelNormalWest},
-                        {_mpVoxelFaceWest[2] + positionOffset, colour, _mpVoxelNormalWest}, {_mpVoxelFaceWest[3] + positionOffset, colour, _mpVoxelNormalWest}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newWestVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadWest(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_TOP)
                 {
-                    const mpVertex newTopVertices[4] = {
-                        {_mpVoxelFaceTop[0] + positionOffset, colour, _mpVoxelNormalTop}, {_mpVoxelFaceTop[1] + positionOffset, colour, _mpVoxelNormalTop},
-                        {_mpVoxelFaceTop[2] + positionOffset, colour, _mpVoxelNormalTop}, {_mpVoxelFaceTop[3] + positionOffset, colour, _mpVoxelNormalTop}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newTopVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadTop(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_BOTTOM)
                 {
-                    const mpVertex newBottomVertices[4] = {
-                        {_mpVoxelFaceBottom[0] + positionOffset, colour, _mpVoxelNormalBottom}, {_mpVoxelFaceBottom[1] + positionOffset, colour, _mpVoxelNormalBottom},
-                        {_mpVoxelFaceBottom[2] + positionOffset, colour, _mpVoxelNormalBottom}, {_mpVoxelFaceBottom[3] + positionOffset, colour, _mpVoxelNormalBottom}
-                    };
-                    memcpy(tempBlockVertIncrementer, &newBottomVertices, sizeof(mpVertex) * 4);
-                    const uint16_t newIndices[_mpVoxelIndexStride] = {
-                    static_cast<uint16_t>(_mpVoxelIndices[0] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[1] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[2] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[3] + vertexCount),
-                    static_cast<uint16_t>(_mpVoxelIndices[4] + vertexCount), static_cast<uint16_t>(_mpVoxelIndices[5] + vertexCount),
-                    };
-                    memcpy(tempBlockIndexIncrementer, &newIndices, sizeof(uint16_t) * _mpVoxelIndexStride);
-                    tempBlockVertIncrementer += 4;
-                    tempBlockIndexIncrementer += _mpVoxelIndexStride;
-                    indexCount += _mpVoxelIndexStride;
-                    vertexCount += 4;
+                    const mpQuad quad = mpCreateQuadBottom(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    
+                    memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
+                    memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
+                    
+                    tempBlockVertIncrementer += vertexStride;
+                    tempBlockIndexIncrementer += indexStride;
+                    vertexCount += vertexStride;
+                    indexCount += indexStride;
+                    quadCount++;
                 }
             }
         }
@@ -243,17 +273,14 @@ static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++)
             {
-                globalX = chunk.position.X + static_cast<float>(x);
-                globalY = chunk.position.Y + static_cast<float>(y);
+                globalX = chunk.position.x + static_cast<float>(x);
+                globalY = chunk.position.y + static_cast<float>(y);
                 
                 heightMap = Perlin(globalX / 100.0f, globalY / 100.0f);
                 heightMap *= 400.0f;
                 
-                if(static_cast<float>(z) <= heightMap)
-                {
-                    chunk.pBlocks[x][y][z].flags = VOXEL_FLAG_ACTIVE;
-                    chunk.pBlocks[x][y][z].type = Voxel_Type_Grass;
-                }
+                const uint32_t globalHeightCheck = (z + chunk.position.z) <= heightMap;
+                chunk.pBlocks[x][y][z] = globalHeightCheck ? mpVoxelBlock{Voxel_Type_Grass, VOXEL_FLAG_ACTIVE} : mpVoxelBlock{Voxel_Type_Empty, 0};
             }
         }
     }
@@ -273,34 +300,40 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
                 if((currentBlock.flags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
                 
-                localCheck = x > 0 && (chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
-                    localCheck |= chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
+                if(x > 0)
+                    localCheck = chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
+                    localCheck = chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
                 currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_SOUTH;
                 
-                localCheck = x < max && (chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
-                    localCheck |= chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
+                if(x < max)
+                    localCheck = chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
+                    localCheck = chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
                 currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_NORTH;
                 
-                localCheck = y < max && (chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
-                    localCheck |= chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
-                
-                localCheck = y > 0 && (chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
-                    localCheck |= chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
+                if(y > 0)
+                    localCheck = chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
+                    localCheck = chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
                 currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_WEST;
                 
-                localCheck = z > 0 && (chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
-                    localCheck |= chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
+                if(y < max)
+                    localCheck = chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
+                    localCheck = chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
+                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
+                
+                if(z > 0)
+                    localCheck = chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
+                    localCheck = chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
                 currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_BOTTOM;
                 
-                localCheck = z < max && (chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE);
-                if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
-                    localCheck |= chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
+                if(z < max)
+                    localCheck = chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE;
+                else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
+                    localCheck = chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
                 currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_TOP;
                 
                 chunk.pBlocks[x][y][z] = currentBlock;
@@ -312,7 +345,7 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
 
 static mpWorldData mpGenerateWorldData()
 {
-    const grid3 worldSize = {3, 3, 1};
+    const grid3 worldSize = {5, 5, 5};
     
     mpWorldData worldData = {};
     worldData.chunkCount = worldSize.x * worldSize.y * worldSize.z;
@@ -323,69 +356,54 @@ static mpWorldData mpGenerateWorldData()
     
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
     {
-        worldData.chunks[i] = mpCreateVoxelChunk();
+        worldData.chunks[i] = mpAllocateChunk();
         worldData.chunks[i].position = pos * MP_CHUNK_SIZE;
         worldData.chunks[i] = mpGenerateChunkTerrain(worldData.chunks[i]);
-        // TODO: Clean up these if statements somehow. Perhaps sneak in a ternary operator?
-        if(pos.X > 0)
+        
+        if(pos.x > 0)
         {
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_SOUTH;
             worldData.chunks[i].southNeighbour = &worldData.chunks[i - 1];
         }
-        if(pos.X < (worldSize.x - 1))
+        if(pos.x < (worldSize.x - 1))
         {
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_NORTH;
             worldData.chunks[i].northNeighbour = &worldData.chunks[i + 1];
         }
-        if(pos.Y > 0)
+        if(pos.y > 0)
         {
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_WEST;
             worldData.chunks[i].westNeighbour = &worldData.chunks[i - worldSize.x];
         }
-        if(pos.Y < (worldSize.y - 1))
+        if(pos.y < (worldSize.y - 1))
         {
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_EAST;
             worldData.chunks[i].eastNeighbour = &worldData.chunks[i + worldSize.x];
         }
-        if(pos.Z > 0)
-        {
+        if(pos.z > 0)
+        {// TODO: unfuck top and bottom flag set
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_BOTTOM;
-            worldData.chunks[i].topNeighbour = &worldData.chunks[i - (worldSize.x * worldSize.y)];
+            worldData.chunks[i].bottomNeighbour = &worldData.chunks[i - (worldSize.x * worldSize.y)];
         }
-        if(pos.Z < (worldSize.z - 1))
+        if(pos.z < (worldSize.z - 1))
         {
             worldData.chunks[i].flags |= CHUNK_FLAG_NEIGHBOUR_TOP;
-            worldData.chunks[i].bottomNeighbour = &worldData.chunks[i + (worldSize.x * worldSize.y)];
+            worldData.chunks[i].topNeighbour = &worldData.chunks[i + (worldSize.x * worldSize.y)];
         }
-        // TODO: clean this up as well
-        pos.X++;
-        if(pos.X == worldSize.x)
-        {
-            pos.X = 0;
-            pos.Y++;
-            if(pos.Y == worldSize.y)
-            {
-                pos.Y = 0;
-                pos.Z++;
-            }
-        }
+        // This bit increments x,y and z as if the for loop was iterating over a 3D array
+        pos.x++;
+        pos = pos.x == worldSize.x ? vec3{0, ++pos.y, pos.z} : pos;
+        pos = pos.y == worldSize.y ? vec3{pos.x, 0, ++pos.z} : pos;
     }
+    
     pos = {};
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
     {
         worldData.chunks[i] = mpSetDrawFlags(worldData.chunks[i]);
-        // TODO: clean this up as well
-        pos.X++;
-        if(pos.X == worldSize.x)
-        {
-            pos.X = 0;
-            pos.Y++;
-            if(pos.Y == worldSize.y)
-            {
-                pos.Y = 0;
-                pos.Z++;
-            }
-        }
+        // This bit increments x,y and z as if the for loop was iterating over a 3D array
+        pos.x++;
+        pos = pos.x == worldSize.x ? vec3{0, ++pos.y, pos.z} : pos;
+        pos = pos.y == worldSize.y ? vec3{pos.x, 0, ++pos.z} : pos;
     }
     
     return worldData;
@@ -400,6 +418,8 @@ static mpRenderData mpGenerateRenderData(const mpWorldData *worldData)
     
     for(uint32_t i = 0; i < renderData.meshCount; i++)
         renderData.meshes[i] = mpCreateChunkMesh(&worldData->chunks[i]);
+    
+    printf("quadCount: %d\n", quadCount);
     
     return renderData;
 }
@@ -482,7 +502,6 @@ int main(int argc, char *argv[])
     engine.windowInfo.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
     while(engine.windowInfo.running)
     {
-        PROFILE_SCOPE
         PlatformPollEvents(&engine.eventReceiver);
         
         UpdateCameraControlState(&engine.eventReceiver, &engine.camControls);

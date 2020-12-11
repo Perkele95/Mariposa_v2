@@ -73,8 +73,14 @@ struct mpFPSsampler
 struct mpVertex
 {
     vec3 position;
-    vec3 colour;
     vec3 normal;
+    vec4 colour;
+};
+
+struct mpQuad
+{
+    mpVertex vertices[4];
+    uint16_t indices[6];
 };
 
 struct mpMesh
@@ -99,7 +105,16 @@ enum mpVoxelType
     Voxel_Type_Grass,
     Voxel_Type_Dirt,
     Voxel_Type_Stone,
+    Voxel_Type_Water,
     Voxel_Type_MAX,
+};
+// TODO: Create associative array for colours perhaps
+static const vec4 _mpBlockColours[Voxel_Type_MAX] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 0.5f, 0.2f, 1.0f},
+    {0.5f, 0.4f, 0.2f, 1.0f},
+    {0.2f, 0.2f, 0.2f, 1.0f},
+    {0.3f, 0.7f, 1.0f, 0.5f},
 };
 
 enum mpVoxelFlags
@@ -113,6 +128,12 @@ enum mpVoxelFlags
     VOXEL_FLAG_DRAW_WEST   = 0x0040,
 };
 
+struct mpVoxelBlock
+{
+    mpVoxelType type;
+    uint32_t flags;
+};
+
 enum mpChunkFlags
 {
     CHUNK_FLAG_IS_EMPTY         = 0x0001,
@@ -122,12 +143,7 @@ enum mpChunkFlags
     CHUNK_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
     CHUNK_FLAG_NEIGHBOUR_EAST   = 0x0020,
     CHUNK_FLAG_NEIGHBOUR_WEST   = 0x0040,
-};
-
-struct mpVoxelBlock
-{
-    mpVoxelType type;
-    uint32_t flags;
+    CHUNK_FLAG_IS_DIRTY         = 0x0080,
 };
 
 struct mpVoxelChunk

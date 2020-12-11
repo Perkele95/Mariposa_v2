@@ -10,21 +10,21 @@
 
 struct vec2
 {
-    float X, Y;
+    float x, y;
 };
 
 struct vec3
 {
-    float X, Y, Z;
+    float x, y, z;
 };
 
 inline vec3 operator*(float a, vec3 b)
 {
     vec3 result;
     
-    result.X = a * b.X;
-    result.Y = a * b.Y;
-    result.Z = a * b.Z;
+    result.x = a * b.x;
+    result.y = a * b.y;
+    result.z = a * b.z;
     
     return result;
 }
@@ -45,9 +45,9 @@ inline vec3 operator+(vec3 a)
 {
     vec3 result;
     
-    result.X = -a.X;
-    result.Y = -a.Y;
-    result.Z = -a.Z;
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
     
     return result;
 }
@@ -56,9 +56,9 @@ inline vec3 operator+(vec3 a, vec3 b)
 {
     vec3 result;
     
-    result.X = a.X + b.X;
-    result.Y = a.Y + b.Y;
-    result.Z = a.Z + b.Z;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
     
     return result;
 }
@@ -67,9 +67,9 @@ inline vec3 operator+(float b, vec3 a)
 {
     vec3 result;
     
-    result.X = a.X + b;
-    result.Y = a.Y + b;
-    result.Z = a.Z + b;
+    result.x = a.x + b;
+    result.y = a.y + b;
+    result.z = a.z + b;
     
     return result;
 }
@@ -78,9 +78,9 @@ inline vec3 operator+(vec3 a, float b)
 {
     vec3 result;
     
-    result.X = a.X + b;
-    result.Y = a.Y + b;
-    result.Z = a.Z + b;
+    result.x = a.x + b;
+    result.y = a.y + b;
+    result.z = a.z + b;
     
     return result;
 }
@@ -96,9 +96,9 @@ inline vec3 operator-(vec3 a, vec3 b)
 {
     vec3 result;
     
-    result.X = a.X - b.X;
-    result.Y = a.Y - b.Y;
-    result.Z = a.Z - b.Z;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
     
     return result;
 }
@@ -107,9 +107,9 @@ inline vec3 operator-(vec3 a, float b)
 {
     vec3 result;
     
-    result.X = a.X - b;
-    result.Y = a.Y - b;
-    result.Z = a.Z - b;
+    result.x = a.x - b;
+    result.y = a.y - b;
+    result.z = a.z - b;
     
     return result;
 }
@@ -118,9 +118,9 @@ inline vec3 operator-(float b, vec3 a)
 {
     vec3 result;
     
-    result.X = a.X - b;
-    result.Y = a.Y - b;
-    result.Z = a.Z - b;
+    result.x = a.x - b;
+    result.y = a.y - b;
+    result.z = a.z - b;
     
     return result;
 }
@@ -134,19 +134,19 @@ inline vec3& operator-=(vec3 &a, vec3 b)
 
 inline vec3 normalise(vec3 vec)
 {
-    float length = sqrtf(vec.X * vec.X + vec.Y * vec.Y + vec.Z * vec.Z);
+    float length = sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
     vec3 result;
     
-    result.X = vec.X / length;
-    result.Y = vec.Y / length;
-    result.Z = vec.Z / length;
+    result.x = vec.x / length;
+    result.y = vec.y / length;
+    result.z = vec.z / length;
     
     return result;
 }
 
 inline float vec3Dot(vec3 a, vec3 b)
 {
-    float result = a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+    float result = a.x * b.x + a.y * b.y + a.z * b.z;
     
     return result;
 }
@@ -155,12 +155,153 @@ inline vec3 vec3Cross(vec3 a, vec3 b)
 {
     vec3 result;
     
-    result.X = a.Y * b.Z - a.Z * b.Y;
-    result.Y = a.Z * b.X - a.X * b.Z;
-    result.Z = a.X * b.Y - a.Y * b.X;
+    result.x = a.y * b.z - a.z * b.y;
+    result.y = a.z * b.x - a.x * b.z;
+    result.z = a.x * b.y - a.y * b.x;
     
     return result;
 }
+
+struct vec4
+{
+    float x, y, z, w;
+};
+
+inline vec4 operator*(float a, vec4 b)
+{
+    vec4 result;
+    
+    result.x = a * b.x;
+    result.y = a * b.y;
+    result.z = a * b.z;
+    result.w = a * b.w;
+    
+    return result;
+}
+
+inline vec4 operator*(vec4 b, float a)
+{
+    return a * b;
+}
+
+inline vec4& operator*=(vec4 &a, float b)
+{
+    a = b * a;
+    
+    return a;
+}
+
+inline vec4 operator-(vec4 a)
+{
+    vec4 result;
+    
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
+    result.w = -a.w;
+    
+    return result;
+}
+
+inline vec4 operator+(vec4 a, vec4 b)
+{
+    vec4 result;
+    
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    
+    return result;
+}
+
+inline vec4 operator+(float b, vec4 a)
+{
+    vec4 result;
+    
+    result.x = a.x + b;
+    result.y = a.y + b;
+    result.z = a.z + b;
+    result.w = a.w + b;
+    
+    return result;
+}
+
+inline vec4 operator+(vec4 a, float b)
+{
+    vec4 result;
+    
+    result.x = a.x + b;
+    result.y = a.y + b;
+    result.z = a.z + b;
+    result.w = a.w + b;
+    
+    return result;
+}
+
+inline vec4& operator+=(vec4 &a, vec4 b)
+{
+    a = a + b;
+    
+    return a;
+}
+
+inline vec4 operator-(vec4 a, vec4 b)
+{
+    vec4 result;
+    
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    result.w = a.w - b.w;
+    
+    return result;
+}
+
+inline vec4 operator-(vec4 a, float b)
+{
+    vec4 result;
+    
+    result.x = a.x - b;
+    result.y = a.y - b;
+    result.z = a.z - b;
+    result.w = a.w - b;
+    
+    return result;
+}
+
+inline vec4 operator-(float b, vec4 a)
+{
+    vec4 result;
+    
+    result.x = a.x - b;
+    result.y = a.y - b;
+    result.z = a.z - b;
+    result.w = a.w - b;
+    
+    return result;
+}
+
+inline vec4& operator-=(vec4 &a, vec4 b)
+{
+    a = a - b;
+    
+    return a;
+}
+// TODO: simd this
+inline vec4 normalise(vec4 vec)
+{
+    float length = sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z + vec.w * vec.w);
+    vec4 result;
+    
+    result.x = vec.x / length;
+    result.y = vec.y / length;
+    result.z = vec.z / length;
+    result.w = vec.z / length;
+    
+    return result;
+}
+
 
 // ---------------------
 // 4x4 Matrix
@@ -230,7 +371,7 @@ inline mat4x4 Mat4Translate(vec3 t)
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 1.0f, 0.0f,
-        t.X, t.Y, t.Z, 1.0f
+        t.x, t.y, t.z, 1.0f
     };
     return result;
 }
@@ -295,19 +436,19 @@ inline mat4x4 LookAt(vec3 eye, vec3 center, vec3 up)
     
     mat4x4 result;
     
-    result.data[0][0] = X.X;
-    result.data[1][0] = X.Y;
-    result.data[2][0] = X.Z;
+    result.data[0][0] = X.x;
+    result.data[1][0] = X.y;
+    result.data[2][0] = X.z;
     result.data[3][0] = -vec3Dot(X, eye);
     
-    result.data[0][1] = Y.X;
-    result.data[1][1] = Y.Y;
-    result.data[2][1] = Y.Z;
+    result.data[0][1] = Y.x;
+    result.data[1][1] = Y.y;
+    result.data[2][1] = Y.z;
     result.data[3][1] = -vec3Dot(Y, eye);
     
-    result.data[0][2] = Z.X;
-    result.data[1][2] = Z.Y;
-    result.data[2][2] = Z.Z;
+    result.data[0][2] = Z.x;
+    result.data[1][2] = Z.y;
+    result.data[2][2] = Z.z;
     result.data[3][2] = -vec3Dot(Z, eye);
     
     result.data[0][3] = 0.0f;
@@ -354,7 +495,7 @@ inline float _dotGridGradient(float ix, float iy, float x, float y)
     float dx = x - ix;
     float dy = y - iy;
     
-    return dx * gradient.X + dy * gradient.Y;
+    return dx * gradient.x + dy * gradient.y;
 }
 
 inline float Perlin(float x, float y)
