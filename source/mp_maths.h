@@ -34,6 +34,22 @@ inline vec3 operator*(vec3 b, float a)
     return a * b;
 }
 
+inline vec3 operator/(float a, vec3 b)
+{
+    vec3 result;
+    
+    result.x = b.x / a;
+    result.y = b.y / a;
+    result.z = b.z / a;
+    
+    return result;
+}
+
+inline vec3 operator/(vec3 b, float a)
+{
+    return a / b;
+}
+
 inline vec3& operator*=(vec3 &a, float b)
 {
     a = b * a;
@@ -498,7 +514,7 @@ inline float _dotGridGradient(float ix, float iy, float x, float y)
     return dx * gradient.x + dy * gradient.y;
 }
 
-inline float Perlin(float x, float y)
+inline float perlin(float x, float y)
 {
     int32_t x0 = (int32_t)x;
     int32_t x1 = x0 + 1;
@@ -518,6 +534,14 @@ inline float Perlin(float x, float y)
     float ix1 = _lerp(n0, n1, sx);
     
     float result = _lerp(ix0, ix1, sy);
+    return result;
+}
+
+inline float perlin3Dmap(vec3 position)
+{
+    float firstPass = perlin(position.x, position.y);
+    float result = perlin(position.z, firstPass);
+    
     return result;
 }
 

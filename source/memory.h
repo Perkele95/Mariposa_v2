@@ -5,71 +5,92 @@
 #include <stdio.h>
 #include <cstring>
 
-struct mpMemoryArena
+struct mpMemoryRegion
 {
-    uint8_t *begin, *data;
-    uint32_t subDivCount;
-    size_t size, sizeMax;
-};
-
-struct mpMemorySubdivision
-{
-    mpMemoryArena *parent;
+    mpMemoryRegion *next;
     uint8_t *data;
-    size_t size, sizeMax;
+    size_t dataSize;
+    size_t regionSize;
 };
 
-inline mpMemoryArena mpCreateMemoryArena(size_t size)
+struct mpMemoryPool
 {
-    mpMemoryArena arena = {};
-    arena.begin = static_cast<uint8_t*>(malloc(size));
-    memset(arena.begin, 0, size);
-    arena.data = arena.begin;
-    arena.sizeMax = size;
-    
-    return arena;
-}
+    void *start;
+    mpMemoryRegion *head;
+    size_t size;
+    uint32_t regionCount;
+};
 
-inline void mpDestroyMemoryArena(mpMemoryArena arena)
+inline mpMemoryPool mpCreateMemoryPool(uint32_t regionCount, size_t regionSize)
 {
-    free(arena.begin);
-    arena.size = 0;
-}
+    mpMemoryPool pool = {};
+    pool.regionCount = regionCount;
+    pool.size = regionCount * (regionSize + sizeof(mpMemoryRegion));
+    pool.start = malloc(pool.size);
+    pool.head = static_cast<mpMemoryRegion*>(pool.start);
+    memset(pool.head, 0, pool.size);
 
-inline mpMemorySubdivision mpSubdivideMemoryArena(mpMemoryArena *arena, size_t size)
-{
-    mpMemorySubdivision subDiv = {};
-    if((arena->size + size) < arena->sizeMax)
+    // Prepare free list
+    uint8_t *poolStart = reinterpret_cast<uint8_t*>(pool.head);
+    for(uint32_t i = 0; i < regionCount; i++)
     {
-        subDiv.parent = arena;
-        subDiv.data = arena->data;
-        subDiv.sizeMax = size;
-        arena->data += size;
-        arena->size += size;
-        arena->subDivCount++;
+        size_t regionStride = regionSize + sizeof(mpMemoryRegion);
+        size_t stride = i * regionStride;
+        mpMemoryRegion *region = reinterpret_cast<mpMemoryRegion*>(poolStart + stride);
+        region->data = poolStart + stride + sizeof(mpMemoryRegion);
+        region->regionSize = regionSize;
+        if(i < (regionCount - 1))
+            region->next = reinterpret_cast<mpMemoryRegion*>(poolStart + ((i + 1) * regionStride));
     }
-    else
+    return pool;
+}
+
+inline mpMemoryRegion* mpGetMemoryRegion(mpMemoryPool *pool)
+{
+    mpMemoryRegion *region = pool->head;
+    if(region == nullptr)
     {
         MP_LOG_ERROR
-        printf("MEMORY ERROR: Subdivision request denied; not enough space in arena");
+        puts("MEMORY ERROR: mpGetMemoryRegion failed: pool out of free regions");
         MP_LOG_RESET
+        return nullptr;
     }
-    return subDiv;
+    pool->head = pool->head->next;
+
+    return region;
 }
 
-inline uint8_t* mpPushBackMemorySubdivision(mpMemorySubdivision *subDiv, size_t size)
+inline void* mpAllocateIntoRegion(mpMemoryRegion *region, size_t allocationSize)
 {
-    uint8_t* bytePtr = nullptr;
-    if((subDiv->size + size) < subDiv->sizeMax)
-    {
-        bytePtr = (subDiv->data + subDiv->size);
-        subDiv->size += size;
-    }
-    else
+    void *data = region->data;
+    region->data += allocationSize;
+    region->dataSize += allocationSize;
+    if(region->dataSize > region->regionSize)
     {
         MP_LOG_ERROR
-        printf("MEMORY ERROR: Subdivision push denied; not enough space in subdivision");
+        puts("MEMORY ERROR: mpAllocateIntoRegion failed: region is out of memory");
         MP_LOG_RESET
+        return nullptr;
     }
-    return bytePtr;
+
+    return data;
+}
+
+inline void mpFreeMemoryRegion(mpMemoryPool *pool, mpMemoryRegion *region)
+{
+    if(region == nullptr)
+    {
+        MP_LOG_ERROR
+        puts("MEMORY ERROR: mpFreeMemoryRegion failed: region is null");
+        MP_LOG_RESET
+        return;
+    }
+    region->next = pool->head;
+    pool->head = region;
+}
+
+inline void mpDestroyMemoryPool(mpMemoryPool *pool)
+{
+    free(pool->start);
+    memset(pool, 0, sizeof(mpMemoryPool));
 }

@@ -6,8 +6,8 @@
 #include "..\Vulkan\Include\vulkan\vulkan_win32.h"
 #endif
 
-void mpVulkanInit(mpEngine *engine, mpMemorySubdivision *memory);
-void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory);
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion);
+void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion);
 void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount);
 
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
@@ -42,11 +42,11 @@ struct mpVkRenderer
     VkPhysicalDevice gpu;
     VkDevice device;
     VkSurfaceKHR surface;
-    
+
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     QueueFamilyIndices indices;
-    
+
     VkSwapchainKHR swapChain;
     VkImage *pSwapChainImages;
     VkImageView *pSwapChainImageViews;
@@ -54,43 +54,43 @@ struct mpVkRenderer
     VkExtent2D swapChainExtent;
     uint32_t swapChainImageCount;
     SwapChainSupportDetails swapDetails;
-    
+
     VkRenderPass renderPass;
     VkDescriptorPool descriptorPool;
     VkDescriptorSet *pDescriptorSets;
     VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
-    
+
     VkShaderModule vertShaderModule;
     VkShaderModule fragShaderModule;
-    
+
     VkFramebuffer *pFramebuffers;
     bool32 *pFramebufferResized;
     uint32_t currentFrame;
-    
+
     VkCommandPool commandPool;
     VkCommandBuffer *pCommandbuffers;
-    
+
     VkBuffer *vertexbuffers;
     VkDeviceMemory *vertexbufferMemories;
     VkBuffer *indexbuffers;
     VkDeviceMemory *indexbufferMemories;
     VkBuffer *pUniformbuffers;
     VkDeviceMemory *pUniformbufferMemories;
-    
+
     VkImage depthImage;
     VkFormat depthFormat;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
-    
+
     VkSemaphore imageAvailableSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
     VkSemaphore renderFinishedSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
     VkFence inFlightFences[MP_MAX_IMAGES_IN_FLIGHT];
     VkFence *pInFlightImageFences;
-    
+
     UniformbufferObject ubo;
-    
+
     mpFile vertexShader;
     mpFile fragmentShader;
 };

@@ -10,9 +10,9 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
     QueueFamilyIndices indices = {};
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, nullptr);
-    VkQueueFamilyProperties* queueFamilyProperties = (VkQueueFamilyProperties*) malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
+    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount));
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, queueFamilyProperties);
-    
+
     for(uint32_t i = 0; i < queueFamilyCount; i++)
     {
         if(queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -38,12 +38,12 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
         }
     }
     free(queueFamilyProperties);
-    
+
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, nullptr);
-    VkExtensionProperties* availableExtensions = (VkExtensionProperties*) malloc(sizeof(VkExtensionProperties) * extensionCount);
+    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(malloc(sizeof(VkExtensionProperties) * extensionCount));
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, availableExtensions);
-    
+
     bool32 extensionsSupported = false;
     for(uint32_t i = 0; i < arraysize(deviceExtensions); i++)
     {
@@ -57,7 +57,7 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
         }
     }
     free(availableExtensions);
-    
+
     bool32 swapChainAdequate = false;
     if(extensionsSupported)
     {
@@ -66,11 +66,11 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
         uint32_t formatCount = 0, presentModeCount = 0;
         vkGetPhysicalDeviceSurfaceFormatsKHR(*checkedPhysDevice, renderer->surface, &formatCount, nullptr);
         vkGetPhysicalDeviceSurfacePresentModesKHR(*checkedPhysDevice, renderer->surface, &presentModeCount, nullptr);
-        
+
         if((formatCount > 0) && (presentModeCount > 0))
             swapChainAdequate = true;
     }
-    
+
     renderer->indices = indices;
     return indices.isComplete && extensionsSupported && swapChainAdequate;
 }
@@ -80,12 +80,12 @@ static VkFormat FindSupportedDepthFormat(VkPhysicalDevice physDevice)
     VkFormat formats[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
     VkFormatFeatureFlags features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
     VkFormat result = VK_FORMAT_UNDEFINED;
-    
+
     for(uint32_t i = 0; i < arraysize(formats); i++)
     {
         VkFormatProperties props = {};
         vkGetPhysicalDeviceFormatProperties(physDevice, formats[i], &props);
-        
+
         if((props.optimalTilingFeatures & features) == features)
         {
             result = formats[i];
@@ -102,10 +102,10 @@ static void PrepareGpu(mpVkRenderer *renderer)
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, nullptr);
     if(deviceCount == 0)
         printf("Failed to find GPUs with Vulkan Support");
-    
-    VkPhysicalDevice* devices = (VkPhysicalDevice*) malloc(sizeof(VkPhysicalDevice) * deviceCount);
+
+    VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(malloc(sizeof(VkPhysicalDevice) * deviceCount));
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, devices);
-    
+
     for(uint32_t i = 0; i < deviceCount; i++)
     {
         if(IsDeviceSuitable(renderer, &devices[i]))
@@ -115,9 +115,9 @@ static void PrepareGpu(mpVkRenderer *renderer)
         }
     }
     free(devices);
-    
+
     renderer->depthFormat = FindSupportedDepthFormat(renderer->gpu);
-    
+
     if(renderer->gpu == VK_NULL_HANDLE)
         printf("Failed to find a suitable GPU!");
 }
@@ -127,7 +127,7 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     VkDeviceQueueCreateInfo queueCreateInfos[2] = {};
     uint32_t uniqueQueueFamilies[2] = {};
     uint32_t queueCount = 0;
-    
+
     if(renderer->indices.graphicsFamily == renderer->indices.presentFamily)
     {
         uniqueQueueFamilies[0] = renderer->indices.graphicsFamily;
@@ -139,7 +139,7 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
         uniqueQueueFamilies[1] = renderer->indices.presentFamily;
         queueCount = 2;
     }
-    
+
     float queuePriority = 1.0f;
     for(uint32_t i = 0; i < queueCount; i++)
     {
@@ -150,9 +150,9 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
         queueCreateInfo.pQueuePriorities = &queuePriority;
         queueCreateInfos[i] = queueCreateInfo;
     }
-    
+
     VkPhysicalDeviceFeatures deviceFeatures = {};
-    
+
     VkDeviceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = queueCount;
@@ -160,16 +160,16 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     createInfo.pEnabledFeatures = &deviceFeatures;
     createInfo.enabledExtensionCount = arraysize(deviceExtensions);
     createInfo.ppEnabledExtensionNames = deviceExtensions;
-    
+
     if(enableValidation)
     {
         createInfo.enabledLayerCount = arraysize(validationLayers);
         createInfo.ppEnabledLayerNames = validationLayers;
     }
-    
+
     VkResult error = vkCreateDevice(renderer->gpu, &createInfo, nullptr, &renderer->device);
     mp_assert(!error);
-    
+
     vkGetDeviceQueue(renderer->device, renderer->indices.graphicsFamily, 0, &renderer->graphicsQueue);
     vkGetDeviceQueue(renderer->device, renderer->indices.presentFamily, 0, &renderer->presentQueue);
 }
@@ -187,38 +187,38 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     VkInstanceCreateInfo instanceInfo = {};
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceInfo.pApplicationInfo = &appInfo;
-    
+
     if(enableValidation)
     {
         instanceInfo.enabledLayerCount = arraysize(validationLayers);
         instanceInfo.ppEnabledLayerNames = validationLayers;
     }
-    
+
     uint32_t extensionsCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, nullptr);
-    VkExtensionProperties* extensionProperties = (VkExtensionProperties*) malloc(sizeof(VkExtensionProperties) * extensionsCount);
+    VkExtensionProperties* extensionProperties = static_cast<VkExtensionProperties*>(malloc(sizeof(VkExtensionProperties) * extensionsCount));
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, extensionProperties);
-    
+
     char* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
-    
+
     instanceInfo.enabledExtensionCount = arraysize(extensions);
     instanceInfo.ppEnabledExtensionNames = extensions;
-    
+
     MP_LOG_INFO
     for(uint32_t i = 0; i < extensionsCount; i++)
         printf("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
     MP_LOG_RESET
-    
+
     free(extensionProperties);
-    
+
     VkResult error = vkCreateInstance(&instanceInfo, 0, &renderer->instance);
     mp_assert(!error);
-    
+
     callbacks->GetSurface(renderer->instance, &renderer->surface);
-    
+
     PrepareGpu(renderer);
     PrepareDevice(renderer, enableValidation);
-    
+
     // Prepare Descriptor set layouts
     VkDescriptorSetLayoutBinding uboLayoutBinding = {};
     uboLayoutBinding.binding = 0;
@@ -226,23 +226,23 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     uboLayoutBinding.descriptorCount = 1;
     uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     uboLayoutBinding.pImmutableSamplers = nullptr;
-    
+
     VkDescriptorSetLayoutCreateInfo layoutInfo = {};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &uboLayoutBinding;
-    
+
     error = vkCreateDescriptorSetLayout(renderer->device, &layoutInfo, nullptr, &renderer->descriptorSetLayout);
     mp_assert(!error);
-    
+
     // Preapre command pool
     VkCommandPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.queueFamilyIndex = renderer->indices.graphicsFamily;
-    
+
     error = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->commandPool);
     mp_assert(!error);
-    
+
     printf("Vulkan instance, physical device, logical device, descriptor set layouts and command pool prepared\n");
 }
 
@@ -252,8 +252,8 @@ static uint32_t Uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
         return min;
     else if(value > max)
         return max;
-    
-    return value;    
+
+    return value;
 }
 
 static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
@@ -272,11 +272,11 @@ static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat form
     createInfo.subresourceRange.levelCount = 1;
     createInfo.subresourceRange.baseArrayLayer = 0;
     createInfo.subresourceRange.layerCount = 1;
-    
+
     VkImageView imageView;
     VkResult error = vkCreateImageView(device, &createInfo, nullptr, &imageView);
     mp_assert(!error);
-    
+
     return imageView;
 }
 
@@ -287,7 +287,7 @@ VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR *availableFormats,
         if(availableFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB && availableFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             return availableFormats[i];
     }
-    
+
     return availableFormats[0];
 }
 
@@ -303,7 +303,7 @@ VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresentModes, 
         if(availablePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
             return availablePresentModes[i];
     }
-    
+
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
@@ -316,42 +316,42 @@ VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windo
     else
     {
         VkExtent2D actualExtent = { static_cast<uint32_t>(windowWidth), static_cast<uint32_t>(windowHeight) };
-        
+
         actualExtent.width = Uint32Clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         actualExtent.height = Uint32Clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-        
+
         return actualExtent;
     }
 }
 
-static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemorySubdivision *memory, int32_t width, int32_t height)
+static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion *vulkanRegion, int32_t width, int32_t height)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
-    
+
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
     if(renderer->swapDetails.formatCount > 0)
     {
-        renderer->swapDetails.pFormats = reinterpret_cast<VkSurfaceFormatKHR*>(mpPushBackMemorySubdivision(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
+        renderer->swapDetails.pFormats = reinterpret_cast<VkSurfaceFormatKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
     }
-    
+
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
     if(renderer->swapDetails.presentModeCount > 0)
     {
-        renderer->swapDetails.pPresentModes = reinterpret_cast<VkPresentModeKHR*>(mpPushBackMemorySubdivision(memory, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
+        renderer->swapDetails.pPresentModes = reinterpret_cast<VkPresentModeKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
     }
-    
+
     mp_assert((renderer->swapDetails.formatCount > 0) && (renderer->swapDetails.presentModeCount > 0))
-    
+
     VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(renderer->swapDetails.pFormats, renderer->swapDetails.formatCount);
     VkPresentModeKHR presentMode = ChooseSwapPresentMode(renderer->swapDetails.pPresentModes, renderer->swapDetails.presentModeCount);
     VkExtent2D extent = ChooseSwapExtent(renderer->swapDetails.capabilities, width, height);
-    
+
     uint32_t imageCount = renderer->swapDetails.capabilities.minImageCount + 1;
     if(renderer->swapDetails.capabilities.maxImageCount > 0 && imageCount > renderer->swapDetails.capabilities.maxImageCount)
         imageCount = renderer->swapDetails.capabilities.maxImageCount;
-    
+
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = renderer->surface;
@@ -361,9 +361,9 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemorySubdivision *memo
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    
+
     uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily, renderer->indices.presentFamily };
-    
+
     if(renderer->indices.graphicsFamily != renderer->indices.presentFamily)
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -376,25 +376,25 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemorySubdivision *memo
         createInfo.queueFamilyIndexCount = 0;
         createInfo.pQueueFamilyIndices = nullptr;
     }
-    
+
     createInfo.preTransform = renderer->swapDetails.capabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
-    
+
     VkResult error = vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &renderer->swapChain);
     mp_assert(!error)
-    
+
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
-    renderer->pSwapChainImages = reinterpret_cast<VkImage*>(mpPushBackMemorySubdivision(memory, sizeof(VkImageView) * imageCount));
+    renderer->pSwapChainImages = reinterpret_cast<VkImage*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * imageCount));
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
-    
+
     renderer->swapChainImageCount = imageCount;
     renderer->swapChainImageFormat = surfaceFormat.format;
     renderer->swapChainExtent = extent;
-    
-    renderer->pSwapChainImageViews = reinterpret_cast<VkImageView*>(mpPushBackMemorySubdivision(memory, sizeof(VkImageView) * renderer->swapChainImageCount));
+
+    renderer->pSwapChainImageViews = reinterpret_cast<VkImageView*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         renderer->pSwapChainImageViews[i] = CreateImageView(renderer->device, renderer->pSwapChainImages[i], renderer->swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 }
@@ -402,25 +402,25 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemorySubdivision *memo
 static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t height)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
-    
+
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
     if(renderer->swapDetails.formatCount > 0)
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
-    
+
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
     if(renderer->swapDetails.presentModeCount > 0)
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
-    
+
     mp_assert((renderer->swapDetails.formatCount > 0) && (renderer->swapDetails.presentModeCount > 0))
-    
+
     VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(renderer->swapDetails.pFormats, renderer->swapDetails.formatCount);
     VkPresentModeKHR presentMode = ChooseSwapPresentMode(renderer->swapDetails.pPresentModes, renderer->swapDetails.presentModeCount);
     VkExtent2D extent = ChooseSwapExtent(renderer->swapDetails.capabilities, width, height);
-    
+
     uint32_t imageCount = renderer->swapDetails.capabilities.minImageCount + 1;
     if(renderer->swapDetails.capabilities.maxImageCount > 0 && imageCount > renderer->swapDetails.capabilities.maxImageCount)
         imageCount = renderer->swapDetails.capabilities.maxImageCount;
-    
+
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = renderer->surface;
@@ -430,9 +430,9 @@ static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t he
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    
+
     uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily, renderer->indices.presentFamily };
-    
+
     if(renderer->indices.graphicsFamily != renderer->indices.presentFamily)
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -445,23 +445,23 @@ static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t he
         createInfo.queueFamilyIndexCount = 0;
         createInfo.pQueueFamilyIndices = nullptr;
     }
-    
+
     createInfo.preTransform = renderer->swapDetails.capabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
-    
+
     VkResult error = vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &renderer->swapChain);
     mp_assert(!error)
     // TODO: allcoate images
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
-    
+
     renderer->swapChainImageCount = imageCount;
     renderer->swapChainImageFormat = surfaceFormat.format;
     renderer->swapChainExtent = extent;
-    
+
     // Create image views
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         renderer->pSwapChainImageViews[i] = CreateImageView(renderer->device, renderer->pSwapChainImages[i], renderer->swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -478,11 +478,11 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    
+
     VkAttachmentReference colorAttachmentRef = {};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    
+
     VkAttachmentDescription depthAttachment = {};
     depthAttachment.format = renderer->depthFormat;
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -492,17 +492,17 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    
+
     VkAttachmentReference depthAttachmentRef = {};
     depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    
+
     VkSubpassDescription subpass = {};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
-    
+
     VkSubpassDependency dependency = {};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
@@ -510,9 +510,9 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     dependency.srcAccessMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    
+
     VkAttachmentDescription attachments[] = {colorAttachment, depthAttachment};
-    
+
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = arraysize(attachments);
@@ -521,7 +521,7 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     renderPassInfo.pSubpasses = &subpass;
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies = &dependency;
-    
+
     VkResult error = vkCreateRenderPass(renderer->device, &renderPassInfo, nullptr, &renderer->renderPass);
     mp_assert(!error);
 }
@@ -530,18 +530,18 @@ static void PrepareShaderModules(mpVkRenderer *renderer, const mpCallbacks *cons
 {
     renderer->vertexShader = callbacks->mpReadFile("../assets/shaders/vert.spv");
     renderer->fragmentShader = callbacks->mpReadFile("../assets/shaders/frag.spv");
-    
+
     VkShaderModuleCreateInfo shaderModuleInfo = {};
     shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shaderModuleInfo.codeSize = renderer->vertexShader.size;
     shaderModuleInfo.pCode = (const uint32_t*)renderer->vertexShader.handle;
-    
+
     VkResult error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->vertShaderModule);
     mp_assert(!error);
-    
+
     shaderModuleInfo.codeSize = renderer->fragmentShader.size;
     shaderModuleInfo.pCode = (const uint32_t*)renderer->fragmentShader.handle;
-    
+
     error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->fragShaderModule);
     mp_assert(!error);
 }
@@ -559,42 +559,42 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragShaderStageInfo.module = renderer->fragShaderModule;
     fragShaderStageInfo.pName = "main";
-    
+
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-    
+
     VkVertexInputBindingDescription bindingDescription = {};
     bindingDescription.binding = 0;
     bindingDescription.stride = sizeof(mpVertex);
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    
+
     VkVertexInputAttributeDescription attributeDescs[3] = {};
     attributeDescs[0].binding = 0;
     attributeDescs[0].location = 0;
     attributeDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescs[0].offset = offsetof(mpVertex, position);
-    
+
     attributeDescs[1].binding = 0;
     attributeDescs[1].location = 1;
     attributeDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescs[1].offset = offsetof(mpVertex, normal);
-    
+
     attributeDescs[2].binding = 0;
     attributeDescs[2].location = 2;
     attributeDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
     attributeDescs[2].offset = offsetof(mpVertex, colour);
-    
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
     vertexInputInfo.vertexAttributeDescriptionCount = arraysize(attributeDescs);
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescs;
-    
+
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
-    
+
     VkViewport viewport = {};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -602,18 +602,18 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     viewport.height = (float)renderer->swapChainExtent.height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-    
+
     VkRect2D scissor = {};
     scissor.offset = { 0, 0 };
     scissor.extent = renderer->swapChainExtent;
-    
+
     VkPipelineViewportStateCreateInfo viewportState = {};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportState.viewportCount = 1;
     viewportState.pViewports = &viewport;
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
-    
+
     VkPipelineRasterizationStateCreateInfo rasterizer = {};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
@@ -623,12 +623,12 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
-    
+
     VkPipelineMultisampleStateCreateInfo multisampling = {};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    
+
     VkPipelineDepthStencilStateCreateInfo depthStencil = {};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
@@ -636,7 +636,7 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
-    
+
     VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.blendEnable = VK_FALSE;
@@ -659,15 +659,15 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     colorBlend.blendConstants[1] = 0.0f;
     colorBlend.blendConstants[2] = 0.0f;
     colorBlend.blendConstants[3] = 0.0f;
-    
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &renderer->descriptorSetLayout;
-    
+
     VkResult error = vkCreatePipelineLayout(renderer->device, &pipelineLayoutInfo, nullptr, &renderer->pipelineLayout);
     mp_assert(!error);
-    
+
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = arraysize(shaderStages);
@@ -681,7 +681,7 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     pipelineInfo.pColorBlendState = &colorBlend;
     pipelineInfo.layout = renderer->pipelineLayout;
     pipelineInfo.renderPass = renderer->renderPass;
-    
+
     error = vkCreateGraphicsPipelines(renderer->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &renderer->graphicsPipeline);
     mp_assert(!error);
 }
@@ -690,13 +690,13 @@ static uint32_t FindMemoryType(const VkPhysicalDevice *physDevice, uint32_t type
 {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(*physDevice, &memProperties);
-    
+
     for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
     {
         if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & propertyFlags) == propertyFlags)
             return i;
     }
-    
+
     OutputDebugStringA("Failed to find suitable memory type!");
     return 0;
 }
@@ -717,34 +717,34 @@ static void PrepareDepthResources(mpVkRenderer *renderer)
     imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    
+
     VkResult error = vkCreateImage(renderer->device, &imageInfo, nullptr, &renderer->depthImage);
     mp_assert(!error);
-    
+
     VkMemoryRequirements memRequirements;
     vkGetImageMemoryRequirements(renderer->device, renderer->depthImage, &memRequirements);
-    
+
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = FindMemoryType(&renderer->gpu, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    
+
     error = vkAllocateMemory(renderer->device, &allocInfo, nullptr, &renderer->depthImageMemory);
     mp_assert(!error);
-    
+
     vkBindImageMemory(renderer->device, renderer->depthImage, renderer->depthImageMemory, 0);
-    
+
     renderer->depthImageView = CreateImageView(renderer->device, renderer->depthImage, renderer->depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 static void PrepareVkFrameBuffers(mpVkRenderer *renderer)
 {
     PrepareDepthResources(renderer);
-    
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
     {
         VkImageView attachments[] = { renderer->pSwapChainImageViews[i] , renderer->depthImageView };
-        
+
         VkFramebufferCreateInfo framebufferInfo = {};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = renderer->renderPass;
@@ -753,7 +753,7 @@ static void PrepareVkFrameBuffers(mpVkRenderer *renderer)
         framebufferInfo.width = renderer->swapChainExtent.width;
         framebufferInfo.height = renderer->swapChainExtent.height;
         framebufferInfo.layers = 1;
-        
+
         VkResult error = vkCreateFramebuffer(renderer->device, &framebufferInfo, nullptr, &renderer->pFramebuffers[i]);
         mp_assert(!error);
     }
@@ -766,21 +766,21 @@ static void CreateBuffer(mpVkRenderer *renderer, VkDeviceSize size, VkBufferUsag
     bufferInfo.size = size;
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    
+
     VkResult error = vkCreateBuffer(renderer->device, &bufferInfo, nullptr, buffer);
     mp_assert(!error);
-    
+
     VkMemoryRequirements memRequirements;
     vkGetBufferMemoryRequirements(renderer->device, *buffer, &memRequirements);
-    
+
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = FindMemoryType(&renderer->gpu, memRequirements.memoryTypeBits, propertyFlags);
-    
+
     error = vkAllocateMemory(renderer->device, &allocInfo, nullptr, bufferMemory);
     mp_assert(!error);
-    
+
     vkBindBufferMemory(renderer->device, *buffer, *bufferMemory, 0);
 }
 
@@ -791,18 +791,18 @@ static VkCommandBuffer BeginSingleTimeCommands(mpVkRenderer *renderer)
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandPool = renderer->commandPool;
     allocInfo.commandBufferCount = 1;
-    
+
     VkCommandBuffer commandBuffer;
     VkResult error = vkAllocateCommandBuffers(renderer->device, &allocInfo, &commandBuffer);
     mp_assert(!error);
-    
+
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    
+
     error = vkBeginCommandBuffer(commandBuffer, &beginInfo);
     mp_assert(!error);
-    
+
     return commandBuffer;
 }
 
@@ -810,17 +810,17 @@ static void EndSingleTimeCommands(mpVkRenderer *renderer, VkCommandBuffer comman
 {
     VkResult error = vkEndCommandBuffer(commandBuffer);
     mp_assert(!error);
-    
+
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
-    
+
     error = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
     mp_assert(!error);
     error = vkQueueWaitIdle(renderer->graphicsQueue);
     mp_assert(!error);
-    
+
     vkFreeCommandBuffers(renderer->device, renderer->commandPool, 1, &commandBuffer);
 }
 
@@ -829,18 +829,18 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    
+
     for(uint32_t i = 0; i < renderData->meshCount; i++)
     {
         if(renderData->meshes[i].isEmpty)
             continue;
-        
+
         VkDeviceSize vertbufferSize = renderData->meshes[i].verticesSize;
         VkDeviceSize indexbufferSize = renderData->meshes[i].indicesSize;
         VkBuffer vertStagingbuffer, indexStagingbuffer;
         VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
         void *vertData, *indexData;
-        
+
         CreateBuffer(renderer, vertbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &vertStagingbuffer, &vertStagingbufferMemory);
         CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
         vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
@@ -849,22 +849,22 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
         memcpy(indexData, renderData->meshes[i].indices, static_cast<size_t>(indexbufferSize));
         vkUnmapMemory(renderer->device, vertStagingbufferMemory);
         vkUnmapMemory(renderer->device, indexStagingbufferMemory);
-        
+
         CreateBuffer(renderer, vertbufferSize, vertUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->vertexbuffers[i], &renderer->vertexbufferMemories[i]);
         CreateBuffer(renderer, indexbufferSize, indexUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->indexbuffers[i], &renderer->indexbufferMemories[i]);
-        
+
         VkCommandBuffer cmdBuffer = BeginSingleTimeCommands(renderer);
         VkBufferCopy copyRegion = {};
         copyRegion.size = vertbufferSize;
         vkCmdCopyBuffer(cmdBuffer, vertStagingbuffer, renderer->vertexbuffers[i], 1, &copyRegion);
         EndSingleTimeCommands(renderer, cmdBuffer);
-        
+
         cmdBuffer = BeginSingleTimeCommands(renderer);
         copyRegion = {};
         copyRegion.size = indexbufferSize;
         vkCmdCopyBuffer(cmdBuffer, indexStagingbuffer, renderer->indexbuffers[i], 1, &copyRegion);
         EndSingleTimeCommands(renderer, cmdBuffer);
-        
+
         vkDestroyBuffer(renderer->device, vertStagingbuffer, nullptr);
         vkDestroyBuffer(renderer->device, indexStagingbuffer, nullptr);
         vkFreeMemory(renderer->device, vertStagingbufferMemory, nullptr);
@@ -877,33 +877,33 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
     // Prepare uniform buffers
     VkDeviceSize bufferSize = sizeof(UniformbufferObject);
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         CreateBuffer(renderer, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bufferSrcFlags, &renderer->pUniformbuffers[i], &renderer->pUniformbufferMemories[i]);
     // Prepare descriptor pool
     VkDescriptorPoolSize poolSize = {};
     poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSize.descriptorCount = renderer->swapChainImageCount;
-    
+
     VkDescriptorPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
     poolInfo.maxSets = renderer->swapChainImageCount;
-    
+
     VkResult error = vkCreateDescriptorPool(renderer->device, &poolInfo, nullptr, &renderer->descriptorPool);
     mp_assert(!error);
     // Prepare descriptorsets
-    VkDescriptorSetLayout *pLayouts = (VkDescriptorSetLayout*) malloc(sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount);// TODO: use mp memory system
+    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(malloc(sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount));// TODO: use mp memory system
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         pLayouts[i] = renderer->descriptorSetLayout;
-    
+
     VkDescriptorSetAllocateInfo descriptorSetAllocInfo = {};
     descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     descriptorSetAllocInfo.descriptorPool = renderer->descriptorPool;
     descriptorSetAllocInfo.descriptorSetCount = renderer->swapChainImageCount;
     descriptorSetAllocInfo.pSetLayouts = pLayouts;
-    
+
     error = vkAllocateDescriptorSets(renderer->device, &descriptorSetAllocInfo, renderer->pDescriptorSets);
     mp_assert(!error);
     // TODO: FUSE LOOPS TOGETHER
@@ -913,7 +913,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         bufferInfo.buffer = renderer->pUniformbuffers[i];
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformbufferObject);
-        
+
         VkWriteDescriptorSet descriptorWrite = {};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrite.dstSet = renderer->pDescriptorSets[i];
@@ -922,7 +922,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrite.descriptorCount = 1;
         descriptorWrite.pBufferInfo = &bufferInfo;
-        
+
         vkUpdateDescriptorSets(renderer->device, 1, &descriptorWrite, 0, nullptr);
     }
     free(pLayouts);
@@ -932,7 +932,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
     cmdBufferAllocInfo.commandPool = renderer->commandPool;
     cmdBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdBufferAllocInfo.commandBufferCount = renderer->swapChainImageCount;
-    
+
     error = vkAllocateCommandBuffers(renderer->device, &cmdBufferAllocInfo, renderer->pCommandbuffers);
     mp_assert(!error);
     // TODO: FUSE LOOPS TOGETHER
@@ -941,42 +941,42 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-        
+
         error = vkBeginCommandBuffer(renderer->pCommandbuffers[i], &beginInfo);
         mp_assert(!error);
-        
+
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = renderer->renderPass;
         renderPassInfo.framebuffer = renderer->pFramebuffers[i];
         renderPassInfo.renderArea.offset = { 0, 0 };
         renderPassInfo.renderArea.extent = renderer->swapChainExtent;
-        
+
         VkClearValue clearValues[2];
-        clearValues[0].color  = { 0.0f, 0.02f, 0.06f, 1.0f };
+        clearValues[0].color  = { 0.2f, 0.5f, 1.0f, 1.0f };
         clearValues[1].depthStencil = { 1.0f, 0 };
         renderPassInfo.clearValueCount = arraysize(clearValues);
         renderPassInfo.pClearValues = clearValues;
-        
+
         vkCmdBeginRenderPass(renderer->pCommandbuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->graphicsPipeline);
-        
+
         VkDeviceSize offsets[] = { 0 };
-        
+
         vkCmdBindDescriptorSets(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipelineLayout, 0, 1, &renderer->pDescriptorSets[i], 0, nullptr);
-        
+
         for(uint32_t k = 0; k < renderData->meshCount; k++)
         {
             if(renderData->meshes[k].isEmpty)
                 continue;
-            
+
             vkCmdBindVertexBuffers(renderer->pCommandbuffers[i], 0, 1, &renderer->vertexbuffers[k], offsets);
             vkCmdBindIndexBuffer(renderer->pCommandbuffers[i], renderer->indexbuffers[k], 0, VK_INDEX_TYPE_UINT16);
             vkCmdDrawIndexed(renderer->pCommandbuffers[i], renderData->meshes[k].indexCount, 1, 0, 0, 0);
         }
-        
+
         vkCmdEndRenderPass(renderer->pCommandbuffers[i]);
-        
+
         error = vkEndCommandBuffer(renderer->pCommandbuffers[i]);
         mp_assert(!error);
     }
@@ -986,11 +986,11 @@ static void PrepareVkSyncObjects(mpVkRenderer *renderer)
 {
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    
+
     VkFenceCreateInfo fenceInfo = {};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    
+
     for(uint32_t i = 0; i < MP_MAX_IMAGES_IN_FLIGHT; i++)
     {
         VkResult error = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &renderer->imageAvailableSemaphores[i]);
@@ -1002,13 +1002,13 @@ static void PrepareVkSyncObjects(mpVkRenderer *renderer)
     }
 }
 
-static bool32 CheckValidationLayerSupport(mpMemorySubdivision *memory)
+static bool32 CheckValidationLayerSupport(mpMemoryRegion *vulkanRegion)
 {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    VkLayerProperties* availableLayers = reinterpret_cast<VkLayerProperties*>(mpPushBackMemorySubdivision(memory, sizeof(VkLayerProperties) * layerCount));
+    VkLayerProperties* availableLayers = reinterpret_cast<VkLayerProperties*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkLayerProperties) * layerCount));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
-    
+
     bool32 layerFound = false;
     for(uint32_t i = 0; i < arraysize(validationLayers); i++)
     {
@@ -1024,36 +1024,36 @@ static bool32 CheckValidationLayerSupport(mpMemorySubdivision *memory)
     return layerFound;
 }
 
-void mpVulkanInit(mpEngine *engine, mpMemorySubdivision *memory)
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion)
 {
-    engine->rendererHandle = mpPushBackMemorySubdivision(memory, sizeof(mpVkRenderer));
-    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(engine->rendererHandle);
-    
+    core->rendererHandle = mpAllocateIntoRegion(vulkanRegion, sizeof(mpVkRenderer));
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
+
     bool32 enableValidation = true;
-    if(enableValidation && !CheckValidationLayerSupport(memory))
+    if(enableValidation && !CheckValidationLayerSupport(vulkanRegion))
         printf("WARNING: Validation layers requested, but not available\n");
-    
-    PrepareVkRenderer(renderer, enableValidation, &engine->callbacks);
-    PrepareVkSwapChain(renderer, memory, engine->windowInfo.width, engine->windowInfo.height);
-    
+
+    PrepareVkRenderer(renderer, enableValidation, &core->callbacks);
+    PrepareVkSwapChain(renderer, vulkanRegion, core->windowInfo.width, core->windowInfo.height);
+
     PrepareVkRenderPass(renderer);
-    PrepareShaderModules(renderer, &engine->callbacks);
+    PrepareShaderModules(renderer, &core->callbacks);
     PrepareVkPipeline(renderer);
-    
-    renderer->pFramebuffers =          reinterpret_cast<VkFramebuffer*>(  mpPushBackMemorySubdivision(memory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbuffers =        reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbufferMemories = reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
-    renderer->pCommandbuffers =        reinterpret_cast<VkCommandBuffer*>(mpPushBackMemorySubdivision(memory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
-    renderer->pInFlightImageFences =   reinterpret_cast<VkFence*>(        mpPushBackMemorySubdivision(memory, sizeof(VkFence) * renderer->swapChainImageCount));
-    renderer->pDescriptorSets =        reinterpret_cast<VkDescriptorSet*>(mpPushBackMemorySubdivision(memory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * engine->renderData.meshCount));
-    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpPushBackMemorySubdivision(memory, sizeof(VkBuffer) * engine->renderData.meshCount));
-    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * engine->renderData.meshCount));
-    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpPushBackMemorySubdivision(memory, sizeof(VkDeviceMemory) * engine->renderData.meshCount));
-    
+
+    renderer->pFramebuffers =          reinterpret_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanRegion, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        reinterpret_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   reinterpret_cast<VkFence*>(        mpAllocateIntoRegion(vulkanRegion, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        reinterpret_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+
     PrepareVkFrameBuffers(renderer);
-    PrepareVkGeometryBuffers(renderer, &engine->renderData);
-    PrepareVkCommandbuffers(renderer, &engine->renderData);
+    PrepareVkGeometryBuffers(renderer, &core->renderData);
+    PrepareVkCommandbuffers(renderer, &core->renderData);
     PrepareVkSyncObjects(renderer);
 }
 
@@ -1062,22 +1062,22 @@ static void CleanupSwapChain(mpVkRenderer *renderer)
     vkDestroyImageView(renderer->device, renderer->depthImageView, nullptr);
     vkDestroyImage(renderer->device, renderer->depthImage, nullptr);
     vkFreeMemory(renderer->device, renderer->depthImageMemory, nullptr);
-    
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         vkDestroyFramebuffer(renderer->device, renderer->pFramebuffers[i], nullptr);
-    
+
     vkFreeCommandBuffers(renderer->device, renderer->commandPool, renderer->swapChainImageCount, renderer->pCommandbuffers);
     vkDestroyPipeline(renderer->device, renderer->graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(renderer->device, renderer->pipelineLayout, nullptr);
     vkDestroyRenderPass(renderer->device, renderer->renderPass, nullptr);
-    
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
     {
         vkDestroyImageView(renderer->device, renderer->pSwapChainImageViews[i], nullptr);
         vkDestroyBuffer(renderer->device, renderer->pUniformbuffers[i], nullptr);
         vkFreeMemory(renderer->device, renderer->pUniformbufferMemories[i], nullptr);
     }
-    
+
     vkDestroySwapchainKHR(renderer->device, renderer->swapChain, nullptr);
     vkDestroyDescriptorPool(renderer->device, renderer->descriptorPool, nullptr);
 }
@@ -1086,8 +1086,8 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *render
 {
     vkDeviceWaitIdle(renderer->device);
     CleanupSwapChain(renderer);
-    
-    RebuildSwapChain(renderer, width, height);    
+
+    RebuildSwapChain(renderer, width, height);
     PrepareVkRenderPass(renderer);
     PrepareVkPipeline(renderer);
     PrepareVkFrameBuffers(renderer);
@@ -1099,7 +1099,7 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
     renderer->ubo.Model = camera->model;
     renderer->ubo.View = camera->view;
     renderer->ubo.Proj = camera->projection;
-    
+
     void* data;
     VkDeviceSize dataSize = sizeof(renderer->ubo);
     vkMapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex], 0, dataSize, 0, &data);
@@ -1107,38 +1107,38 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uin
     vkUnmapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex]);
 }
 
-void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory)
+void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
 {
-    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(engine->rendererHandle);
-    
-    if(engine->windowInfo.width == 0 || engine->windowInfo.height == 0)
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
+
+    if(core->windowInfo.width == 0 || core->windowInfo.height == 0)
         return;
-    
+
     vkWaitForFences(renderer->device, 1, &renderer->inFlightFences[renderer->currentFrame], VK_TRUE, UINT64MAX);
-    
+
     uint32_t imageIndex = 0;
     VkResult imageResult = vkAcquireNextImageKHR(renderer->device, renderer->swapChain, UINT64MAX, renderer->imageAvailableSemaphores[renderer->currentFrame], VK_NULL_HANDLE, &imageIndex);
     if(imageResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        RecreateSwapChain(renderer, &engine->renderData, engine->windowInfo.width, engine->windowInfo.height);
+        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height);
         return;
     }
     else if(imageResult != VK_SUCCESS && imageResult != VK_SUBOPTIMAL_KHR)
     {
         printf("Failed to acquire swap chain image!");
     }
-    
-    UpdateUBOs(renderer, &engine->camera, imageIndex);
-    
+
+    UpdateUBOs(renderer, &core->camera, imageIndex);
+
     if(renderer->pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(renderer->device, 1, &renderer->pInFlightImageFences[imageIndex], VK_TRUE, UINT64MAX);
-    
+
     renderer->pInFlightImageFences[imageIndex] = renderer->inFlightFences[renderer->currentFrame];
-    
+
     VkSemaphore waitSemaphores[] = { renderer->imageAvailableSemaphores[renderer->currentFrame] };
     VkSemaphore signalSemaphores[] = { renderer->renderFinishedSemaphores[renderer->currentFrame] };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    
+
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.waitSemaphoreCount = 1;
@@ -1148,14 +1148,14 @@ void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory)
     submitInfo.pCommandBuffers = &renderer->pCommandbuffers[imageIndex];
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
-    
+
     vkResetFences(renderer->device, 1, &renderer->inFlightFences[renderer->currentFrame]);
-    
+
     VkResult error = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, renderer->inFlightFences[renderer->currentFrame]);
     mp_assert(!error);
-    
+
     VkSwapchainKHR swapChains[] = { renderer->swapChain };
-    
+
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
@@ -1163,26 +1163,26 @@ void mpVulkanUpdate(mpEngine *engine, mpMemorySubdivision *memory)
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
-    
+
     VkResult presentResult = vkQueuePresentKHR(renderer->presentQueue, &presentInfo);
-    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || engine->windowInfo.hasResized)
-        RecreateSwapChain(renderer, &engine->renderData, engine->windowInfo.width, engine->windowInfo.height);
+    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || core->windowInfo.hasResized)
+        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height);
     else if(presentResult != VK_SUCCESS)
         printf("Failed to present swap chain image!\n");
-    
+
     renderer->currentFrame = (renderer->currentFrame + 1) % MP_MAX_IMAGES_IN_FLIGHT;
 }
 
 void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount)
 {
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*rendererHandle);
-    
+
     CleanupSwapChain(renderer);
-    
+
     vkDestroyShaderModule(renderer->device, renderer->vertShaderModule, nullptr);
     vkDestroyShaderModule(renderer->device, renderer->fragShaderModule, nullptr);
     vkDestroyDescriptorSetLayout(renderer->device, renderer->descriptorSetLayout, nullptr);
-    
+
     for(uint32_t i = 0; i < batchCount; i++)
     {
         vkDestroyBuffer(renderer->device, renderer->indexbuffers[i], nullptr);
@@ -1190,14 +1190,14 @@ void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount)
         vkDestroyBuffer(renderer->device, renderer->vertexbuffers[i], nullptr);
         vkFreeMemory(renderer->device, renderer->vertexbufferMemories[i], nullptr);
     }
-    
+
     for(uint32_t i = 0; i < MP_MAX_IMAGES_IN_FLIGHT; i++)
     {
         vkDestroySemaphore(renderer->device, renderer->imageAvailableSemaphores[i], nullptr);
         vkDestroySemaphore(renderer->device, renderer->renderFinishedSemaphores[i], nullptr);
         vkDestroyFence(renderer->device, renderer->inFlightFences[i], nullptr);
     }
-    
+
     vkDestroyCommandPool(renderer->device, renderer->commandPool, nullptr);
     vkDestroyDevice(renderer->device, nullptr);
     vkDestroySurfaceKHR(renderer->instance, renderer->surface, nullptr);

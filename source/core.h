@@ -106,15 +106,17 @@ enum mpVoxelType
     Voxel_Type_Dirt,
     Voxel_Type_Stone,
     Voxel_Type_Water,
+    Voxel_Type_Grass2,
     Voxel_Type_MAX,
 };
 // TODO: Create associative array for colours perhaps
 static const vec4 _mpBlockColours[Voxel_Type_MAX] = {
     {0.0f, 0.0f, 0.0f, 1.0f},
     {0.0f, 0.5f, 0.2f, 1.0f},
-    {0.5f, 0.4f, 0.2f, 1.0f},
+    {0.4f, 0.3f, 0.1f, 1.0f},
     {0.2f, 0.2f, 0.2f, 1.0f},
     {0.3f, 0.7f, 1.0f, 0.5f},
+    {0.0f, 0.25f, 0.15f, 1.0f},
 };
 
 enum mpVoxelFlags
@@ -128,7 +130,7 @@ enum mpVoxelFlags
     VOXEL_FLAG_DRAW_WEST   = 0x0040,
 };
 
-struct mpVoxelBlock
+struct mpVoxel
 {
     mpVoxelType type;
     uint32_t flags;
@@ -148,10 +150,10 @@ enum mpChunkFlags
 
 struct mpVoxelChunk
 {
-    mpVoxelBlock ***pBlocks;
+    mpVoxel ***pBlocks;
     uint32_t size;
     vec3 position;
-    
+
     uint32_t flags;
     mpVoxelChunk *northNeighbour;
     mpVoxelChunk *southNeighbour;
@@ -179,7 +181,7 @@ struct mpCameraControls
     bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
 };
 
-struct mpEngine
+struct mpCore
 {
     const char *name;
     mpHandle rendererHandle;
@@ -187,10 +189,10 @@ struct mpEngine
     mpCallbacks callbacks;
     mpFPSsampler fpsSampler;
     mpEventReceiver eventReceiver;
-    
+
     mpCamera camera;
     mpCameraControls camControls;
-    
+
     mpWorldData worldData;
     mpRenderData renderData;
 };
