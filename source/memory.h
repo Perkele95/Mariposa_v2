@@ -11,24 +11,24 @@ struct mpMemoryRegion
     uint8_t *data;
     size_t dataSize;
     size_t regionSize;
+    uint32_t poolID;
 };
 
 struct mpMemoryPool
 {
     void *start;
     mpMemoryRegion *head;
-    size_t size;
-    uint32_t regionCount;
+    uint32_t ID;
 };
-
-inline mpMemoryPool mpCreateMemoryPool(uint32_t regionCount, size_t regionSize)
+// Creates a memory pool header
+inline mpMemoryPool mpCreateMemoryPool(uint32_t regionCount, size_t regionSize, uint32_t uniqueID)
 {
+    size_t poolSize = regionCount * (regionSize + sizeof(mpMemoryRegion));
     mpMemoryPool pool = {};
-    pool.regionCount = regionCount;
-    pool.size = regionCount * (regionSize + sizeof(mpMemoryRegion));
-    pool.start = malloc(pool.size);
+    pool.start = malloc(poolSize);
+    pool.ID = uniqueID;
     pool.head = static_cast<mpMemoryRegion*>(pool.start);
-    memset(pool.head, 0, pool.size);
+    memset(pool.head, 0, poolSize);
 
     // Prepare free list
     uint8_t *poolStart = reinterpret_cast<uint8_t*>(pool.head);
@@ -39,12 +39,13 @@ inline mpMemoryPool mpCreateMemoryPool(uint32_t regionCount, size_t regionSize)
         mpMemoryRegion *region = reinterpret_cast<mpMemoryRegion*>(poolStart + stride);
         region->data = poolStart + stride + sizeof(mpMemoryRegion);
         region->regionSize = regionSize;
+        region->poolID = uniqueID;
         if(i < (regionCount - 1))
             region->next = reinterpret_cast<mpMemoryRegion*>(poolStart + ((i + 1) * regionStride));
     }
     return pool;
 }
-
+// Fetches a fresh region from the given pool
 inline mpMemoryRegion* mpGetMemoryRegion(mpMemoryPool *pool)
 {
     mpMemoryRegion *region = pool->head;
@@ -59,7 +60,7 @@ inline mpMemoryRegion* mpGetMemoryRegion(mpMemoryPool *pool)
 
     return region;
 }
-
+// Fetches an alias to the regions data ptr, then bumbs the regions data ptr forward by allocationSize
 inline void* mpAllocateIntoRegion(mpMemoryRegion *region, size_t allocationSize)
 {
     void *data = region->data;
@@ -68,14 +69,21 @@ inline void* mpAllocateIntoRegion(mpMemoryRegion *region, size_t allocationSize)
     if(region->dataSize > region->regionSize)
     {
         MP_LOG_ERROR
-        puts("MEMORY ERROR: mpAllocateIntoRegion failed: region is out of memory");
+        printf("MEMORY ERROR: mpAllocateIntoRegion failed: region(pool: %d) is out of memory\n", region->poolID);
         MP_LOG_RESET
         return nullptr;
     }
 
     return data;
 }
-
+// Allows reuse of the same region by deleting it's memory.
+inline void mpResetMemoryRegion(mpMemoryRegion *region)
+{
+    region->data -= region->dataSize;
+    memset(region->data, 0, region->dataSize);
+    region->dataSize = 0;
+}
+// Free the region and releases it back to the memory pool
 inline void mpFreeMemoryRegion(mpMemoryPool *pool, mpMemoryRegion *region)
 {
     if(region == nullptr)
@@ -85,10 +93,21 @@ inline void mpFreeMemoryRegion(mpMemoryPool *pool, mpMemoryRegion *region)
         MP_LOG_RESET
         return;
     }
+    if(pool->ID != region->poolID)
+    {
+        MP_LOG_ERROR
+        printf("MEMORY ERROR: mpFreeMemoryRegion failed: given region does not belong to pool %d\n", pool->ID);
+        MP_LOG_RESET
+        return;
+    }
+    region->data -= region->dataSize;
+    memset(region->data, 0, region->dataSize);
+    region->dataSize = 0;
+
     region->next = pool->head;
     pool->head = region;
 }
-
+// Completely terminates a pool and makes it unusable
 inline void mpDestroyMemoryPool(mpMemoryPool *pool)
 {
     free(pool->start);

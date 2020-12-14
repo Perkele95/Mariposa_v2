@@ -4,7 +4,7 @@
 #include "events.h"
 #include <windows.h>
 
-void PlatformCreateWindow(mpWindowData *windowData);
+void PlatformCreateWindow(mpWindowData *windowData, const char *name);
 mpCallbacks PlatformGetCallbacks();
 void PlatformPollEvents(mpEventReceiver *pReceiver);
 void PlatformPrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency);

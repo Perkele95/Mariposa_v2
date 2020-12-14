@@ -6,13 +6,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define MP_CHUNK_SIZE 16
-#define MP_VOXEL_SCALE 0.5f
+enum GlobalConstants
+{
+    MP_CHUNK_SIZE = 20,
+};
 
-static uint32_t quadCount = 0;
-// TODO: This function is ugly as hell, consider redoing some of this stuff
 static mpVoxelChunk mpAllocateChunk(mpMemoryRegion *worldGenRegion)
 {
+// TODO: This function is ugly as hell, consider redoing some of this stuff
     static const size_t chunkSize2x = MP_CHUNK_SIZE * MP_CHUNK_SIZE;
     static const size_t chunkSize3x = MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
     mpVoxelChunk chunk = {};
@@ -106,7 +107,7 @@ static mpQuad mpCreateQuadTop(vec3 offset, vec4 colour, float scale, uint16_t in
 
     return quad;
 }
-
+// TODO: consider creating a general purpose quad creation function that takes in some structure and spits out a quad
 static mpQuad mpCreateQuadBottom(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
 {
     mpQuad quad = {};
@@ -121,22 +122,20 @@ static mpQuad mpCreateQuadBottom(vec3 offset, vec4 colour, float scale, uint16_t
 
     return quad;
 }
-// TODO: consider creating a general purpose quad creation function that takes in some structure and spits out a quad
-// Perhaps a struct to hold the arrays could work
-static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenRegion)
+// mpCreateMesh resets tempMemory after use.
+static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshMemory, mpMemoryRegion *tempMemory)
 {
+    static const float VOXEL_SCALE = 0.5f;
     const uint16_t vertexStride = 4;
     const uint16_t indexStride = 6;
     uint16_t vertexCount = 0, indexCount = 0;
 
-    static const size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    mpVertex *tempBlockVertices = static_cast<mpVertex*>(malloc(tempVertBlockSize));// TODO: this temp block could utilies transient memory
-    memset(tempBlockVertices, 0, tempVertBlockSize);
+    static const size_t TEMP_VERT_BLOCK_SIZE = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
+    mpVertex *tempBlockVertices = static_cast<mpVertex*>(mpAllocateIntoRegion(tempMemory, TEMP_VERT_BLOCK_SIZE));
     mpVertex *tempBlockVertIncrementer = tempBlockVertices;
 
-    static const size_t tempIndexBlockSize = sizeof(uint16_t) * 18 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    uint16_t *tempBlockIndices = static_cast<uint16_t*>(malloc(tempIndexBlockSize));
-    memset(tempBlockIndices, 0, tempIndexBlockSize);
+    static const size_t TEMP_INDEX_BLOCK_SIZE = sizeof(uint16_t) * 18 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
+    uint16_t *tempBlockIndices = static_cast<uint16_t*>(mpAllocateIntoRegion(tempMemory, TEMP_INDEX_BLOCK_SIZE));
     uint16_t *tempBlockIndexIncrementer = tempBlockIndices;
 
     for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++){
@@ -156,7 +155,7 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
 
                 if(drawFlags & VOXEL_FLAG_DRAW_NORTH)
                 {
-                    const mpQuad quad = mpCreateQuadNorth(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadNorth(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -165,11 +164,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_SOUTH)
                 {
-                    const mpQuad quad = mpCreateQuadSouth(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadSouth(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -178,11 +176,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_EAST)
                 {
-                    const mpQuad quad = mpCreateQuadEast(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadEast(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -191,11 +188,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_WEST)
                 {
-                    const mpQuad quad = mpCreateQuadWest(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadWest(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -204,11 +200,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_TOP)
                 {
-                    const mpQuad quad = mpCreateQuadTop(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadTop(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -217,11 +212,10 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_BOTTOM)
                 {
-                    const mpQuad quad = mpCreateQuadBottom(positionOffset, colour, MP_VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuadBottom(positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -230,7 +224,6 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
                     tempBlockIndexIncrementer += indexStride;
                     vertexCount += vertexStride;
                     indexCount += indexStride;
-                    quadCount++;
                 }
             }
         }
@@ -238,15 +231,14 @@ static mpMesh mpCreateChunkMesh(mpVoxelChunk *chunk, mpMemoryRegion *worldGenReg
     mpMesh mesh = {};
     mesh.verticesSize = vertexCount * sizeof(mpVertex);
     mesh.indicesSize = indexCount * sizeof(uint16_t);
-    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(worldGenRegion, mesh.verticesSize));
-    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(worldGenRegion, mesh.indicesSize));
+    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(meshMemory, mesh.verticesSize));
+    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(meshMemory, mesh.indicesSize));
     mesh.indexCount = indexCount;
     mesh.isEmpty = !(vertexCount && indexCount);
 
     memcpy(mesh.vertices, tempBlockVertices, mesh.verticesSize);
     memcpy(mesh.indices, tempBlockIndices, mesh.indicesSize);
-    free(tempBlockVertices);
-    free(tempBlockIndices);
+    mpResetMemoryRegion(tempMemory);
 
     return mesh;
 }
@@ -257,6 +249,7 @@ static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
     vec3 globalPos = {};
     const float threshold = -0.5f;
     const float typeThreshold = -1.0f;
+    const float noiseFactor = 10.0f;
 
     for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++){
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
@@ -266,11 +259,11 @@ static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
                 globalPos.y = chunk.position.y + static_cast<float>(y);
                 globalPos.z = chunk.position.z + static_cast<float>(z);
 
-                noiseValue = 20.0f * perlin3Dmap(globalPos / 10.0f);
+                noiseValue = noiseFactor * perlin3Dmap(globalPos / noiseFactor);
 
-                chunk.pBlocks[x][y][z].flags = noiseValue < threshold ? VOXEL_FLAG_ACTIVE : 0;
+                if(noiseValue < threshold)
+                    chunk.pBlocks[x][y][z].flags = VOXEL_FLAG_ACTIVE;
                 chunk.pBlocks[x][y][z].type = noiseValue < typeThreshold ? Voxel_Type_Grass : Voxel_Type_Grass2;
-
             }
         }
     }
@@ -334,19 +327,19 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
     return chunk;
 }
 
-static mpWorldData mpGenerateWorldData(mpMemoryRegion *worldGenRegion)
+static mpWorldData mpGenerateWorldData(mpMemoryRegion *chunkMemory)
 {
     const grid3 worldSize = {5, 5, 5};
 
     mpWorldData worldData = {};
     worldData.chunkCount = worldSize.x * worldSize.y * worldSize.z;
-    worldData.chunks = static_cast<mpVoxelChunk*>(mpAllocateIntoRegion(worldGenRegion, sizeof(mpVoxelChunk) * worldData.chunkCount));
+    worldData.chunks = static_cast<mpVoxelChunk*>(mpAllocateIntoRegion(chunkMemory, sizeof(mpVoxelChunk) * worldData.chunkCount));
 
     vec3 pos = {};
 
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
     {
-        worldData.chunks[i] = mpAllocateChunk(worldGenRegion);
+        worldData.chunks[i] = mpAllocateChunk(chunkMemory);
         worldData.chunks[i].position = pos * MP_CHUNK_SIZE;
         worldData.chunks[i] = mpGenerateChunkTerrain(worldData.chunks[i]);
 
@@ -399,17 +392,15 @@ static mpWorldData mpGenerateWorldData(mpMemoryRegion *worldGenRegion)
     return worldData;
 }
 
-static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryRegion *worldGenRegion)
+static mpRenderData mpGenerateRenderData(const mpWorldData *const worldData, mpMemoryRegion *meshMemory, mpMemoryRegion *tempMemory)
 {
     mpRenderData renderData = {};
 
     renderData.meshCount = worldData->chunkCount;
-    renderData.meshes = static_cast<mpMesh*>(mpAllocateIntoRegion(worldGenRegion, sizeof(mpMesh) * renderData.meshCount));
+    renderData.meshes = static_cast<mpMesh*>(mpAllocateIntoRegion(meshMemory, sizeof(mpMesh) * renderData.meshCount));
 
     for(uint32_t i = 0; i < renderData.meshCount; i++)
-        renderData.meshes[i] = mpCreateChunkMesh(&worldData->chunks[i], worldGenRegion);
-
-    printf("quadCount: %d\n", quadCount);
+        renderData.meshes[i] = mpCreateMesh(&worldData->chunks[i], meshMemory, tempMemory);
 
     return renderData;
 }
@@ -424,14 +415,14 @@ inline static void ProcessKeyToCameraControl(const mpEventReceiver *receiver, mp
 
 static void UpdateCameraControlState(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
 {
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_W, &cameraControls->rUp);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_S, &cameraControls->rDown);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_A, &cameraControls->rLeft);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_D, &cameraControls->rRight);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_UP, &cameraControls->tForward);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_DOWN, &cameraControls->tBackward);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_LEFT, &cameraControls->tLeft);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_RIGHT, &cameraControls->tRight);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_UP, &cameraControls->rUp);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_DOWN, &cameraControls->rDown);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_LEFT, &cameraControls->rLeft);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_RIGHT, &cameraControls->rRight);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_W, &cameraControls->tForward);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_S, &cameraControls->tBackward);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_A, &cameraControls->tLeft);
+    ProcessKeyToCameraControl(eventReceiver, MP_KEY_D, &cameraControls->tRight);
 }
 
 inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
@@ -450,43 +441,80 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
     }
 }
 
+// NOTE: could perhaps return raycasthit data or smth
+static mpVoxel* mpRaycast(mpCamera *cam, mpWorldData *worldData, vec3 direction)
+{
+    const vec3 chunkDiagonal = {MP_CHUNK_SIZE, MP_CHUNK_SIZE, MP_CHUNK_SIZE};
+    vec3 raycastHit = cam->position + direction;
+
+    mpVoxel *result = nullptr;
+    for(uint32_t i = 0; i < worldData->chunkCount; i++)
+    {
+        const vec3 chunkCorner = worldData->chunks[i].position + chunkDiagonal;
+        // Simple bounding box search to find which chunk the destination is located within
+        if(raycastHit.x < worldData->chunks[i].position.x)
+            continue;
+        if(raycastHit.x > chunkCorner.x)
+            continue;
+
+        if(raycastHit.y < worldData->chunks[i].position.y)
+            continue;
+        if(raycastHit.y > chunkCorner.y)
+            continue;
+
+        if(raycastHit.z < worldData->chunks[i].position.z)
+            continue;
+        if(raycastHit.z > chunkCorner.z)
+            continue;
+
+        // Convert raycastHit to local chunk space
+        raycastHit -= worldData->chunks[i].position;
+        // Use that as indices to the pBlocks array
+        const uint32_t x = static_cast<uint32_t>(raycastHit.x);
+        const uint32_t y = static_cast<uint32_t>(raycastHit.y);
+        const uint32_t z = static_cast<uint32_t>(raycastHit.z);
+        result = &worldData->chunks[i].pBlocks[x][y][z];
+        worldData->chunks[i].flags |= CHUNK_FLAG_IS_DIRTY;
+        break;
+    }
+    return result;
+}
+
 int main(int argc, char *argv[])
 {
-    mpCore core = {};
-    core.name = "Mariposa";
-    core.windowInfo = {};
+    mpCore core;
+    memset(&core, 0, sizeof(mpCore));
+    core.name = "Mariposa 3D voxel engine";
 
-    PlatformCreateWindow(&core.windowInfo);
+    PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
 
-    mpMemoryPool bigPool = mpCreateMemoryPool(1, MegaBytes(32));
-    mpMemoryPool smallPool = mpCreateMemoryPool(10, MegaBytes(1));
+    mpMemoryPool bigPool = mpCreateMemoryPool(1, MegaBytes(50), 1);
+    mpMemoryPool smallPool = mpCreateMemoryPool(10, MegaBytes(10), 2);
 
-    mpMemoryRegion *worldGenRegion = mpGetMemoryRegion(&bigPool);
-    mpMemoryRegion *vulkanRegion = mpGetMemoryRegion(&smallPool);
-    mpMemoryRegion *initRegion = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *chunkMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *tempMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *meshMemory = mpGetMemoryRegion(&bigPool);
 
-    core.worldData = mpGenerateWorldData(worldGenRegion);
-    core.renderData = mpGenerateRenderData(&core.worldData, worldGenRegion);
+    core.worldData = mpGenerateWorldData(chunkMemory);
+    core.renderData = mpGenerateRenderData(&core.worldData, meshMemory, tempMemory);
 
-    mpVulkanInit(&core, vulkanRegion);
+    mpVulkanInit(&core, vulkanMemory);
 
     MP_LOG_TRACE
-    printf("vulkanRegion uses %zu out of %zu kB\n", (vulkanRegion->dataSize / 1000), (vulkanRegion->regionSize) / 1000);
+    printf("chunkMemory uses %zu out of %zu kB\n", (chunkMemory->dataSize / 1000), (chunkMemory->regionSize) / 1000);
+    printf("meshMemory uses %zu out of %zu kB\n", (meshMemory->dataSize / 1000), (meshMemory->regionSize) / 1000);
+    mpResetMemoryRegion(meshMemory);
 
-    core.camera = {};
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
     core.camera.fov = PI32 / 3.0f;
     core.camera.model = Mat4x4Identity();
-    core.camera.position = vec3{2.0f, 2.0f, 2.0f};
+    core.camera.position = vec3{12.0f, 12.0f, 12.0f};
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
-    core.camControls = {};
-    core.eventReceiver = {};
-
-    core.fpsSampler = {};
     core.fpsSampler.level = 1000;
 
     float timestep = 0.0f;
@@ -494,13 +522,14 @@ int main(int argc, char *argv[])
     PlatformPrepareClock(&lastCounter, &perfCountFrequency);
 
     core.windowInfo.running = true;
-    core.windowInfo.hasResized = false; // WM_SIZE is triggered at startup, so we need to reset hasResized before the loop
+    core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
     {
         PlatformPollEvents(&core.eventReceiver);
 
         UpdateCameraControlState(&core.eventReceiver, &core.camControls);
 
+        // Increment camera transform
         if(core.camControls.rUp)
             core.camera.pitch += core.camera.sensitivity * timestep;
         else if(core.camControls.rDown)
@@ -515,6 +544,7 @@ int main(int argc, char *argv[])
         else if(core.camera.pitch < -core.camera.pitchClamp)
             core.camera.pitch = -core.camera.pitchClamp;
 
+        // Update view & projection matrices
         const vec3 front = {cosf(core.camera.pitch) * cosf(core.camera.yaw), cosf(core.camera.pitch) * sinf(core.camera.yaw), sinf(core.camera.pitch)};
         const vec3 left = {sinf(core.camera.yaw), -cosf(core.camera.yaw), 0.0f};
         if(core.camControls.tForward)
@@ -529,7 +559,23 @@ int main(int argc, char *argv[])
         core.camera.view = LookAt(core.camera.position, core.camera.position + front, {0.0f, 0.0f, 1.0f});
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
-        mpVulkanUpdate(&core, vulkanRegion);
+        if(core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT)
+        {
+            mpVoxel *raycastHit = mpRaycast(&core.camera, &core.worldData, front);
+            if(raycastHit)
+                raycastHit->flags ^= VOXEL_FLAG_ACTIVE;
+        }
+        // Recreate mesh for dirty chunks
+        for(uint32_t i = 0; i < core.worldData.chunkCount; i++)
+        {
+            if(core.worldData.chunks[i].flags & CHUNK_FLAG_IS_DIRTY)
+            {
+                core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], meshMemory, tempMemory);
+                core.worldData.chunks[i].flags ^= CHUNK_FLAG_IS_DIRTY;
+            }
+        }
+
+        mpVulkanUpdate(&core, vulkanMemory);
 
         core.windowInfo.hasResized = false;
         ResetEventReceiver(&core.eventReceiver);

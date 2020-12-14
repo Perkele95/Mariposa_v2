@@ -98,7 +98,7 @@ struct mpRenderData
     mpMesh *meshes;
     uint32_t meshCount;
 };
-
+// TODO: Capitalise these
 enum mpVoxelType
 {
     Voxel_Type_Empty,

@@ -9,7 +9,7 @@ static HWND gWindow = 0;
 LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
-    
+
     switch (message)
     {
         case WM_SIZE:
@@ -28,7 +28,7 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM wPara
         {
             gWin32WindowData->running = false;
         } break;
-        
+
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
@@ -67,7 +67,7 @@ mpFile Win32ReadFile(const char *filename)
     mpFile result = {};
     mpHandle fileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     LARGE_INTEGER fileSize;
-    
+
     if((fileHandle != INVALID_HANDLE_VALUE) && GetFileSizeEx(fileHandle, &fileSize))
     {
         mp_assert(fileSize.QuadPart < 0xFFFFFFFF);
@@ -85,7 +85,7 @@ mpFile Win32ReadFile(const char *filename)
                 free(result.handle);
                 result.handle = 0;
             }
-            
+
         }
         CloseHandle(fileHandle);
     }
@@ -101,27 +101,27 @@ bool32 Win32WriteFile(const char *filename, mpFile *file)
         DWORD bytesWritten;
         if(WriteFile(fileHandle, file->handle, file->size, &bytesWritten, 0))
             result = (file->size == bytesWritten);
-        
+
         CloseHandle(fileHandle);
     }
     return result;
 }
 
-void PlatformCreateWindow(mpWindowData *windowData)
+void PlatformCreateWindow(mpWindowData *windowData, const char *name)
 {
     gWin32WindowData = &(*windowData);
     gHInstance = GetModuleHandleA(0);
-    
+
     WNDCLASSA windowClass = {};
     windowClass.style = CS_HREDRAW | CS_VREDRAW;
     windowClass.lpfnWndProc = Win32MainWindowCallback;
     windowClass.hInstance = gHInstance;
     //WindowClass.hIcon;
     windowClass.lpszClassName = "MariposaWindowClass";
-    
+
     if(RegisterClassA(&windowClass))
     {
-        gWindow = CreateWindowExA(0, windowClass.lpszClassName, "Mariposa",
+        gWindow = CreateWindowExA(0, windowClass.lpszClassName, name,
                                 WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                 CW_USEDEFAULT, CW_USEDEFAULT,
                                 CW_USEDEFAULT, CW_USEDEFAULT,
@@ -168,7 +168,7 @@ static void Win32ToggleFullScreen()
     }
 }
 
-static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpKeyState state, bool32 altKeyDown)
+static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpEventState state, bool32 altKeyDown)
 {
     switch (keyCode) {
     case 'W':
@@ -215,7 +215,7 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpKey
         break;
     default: break;
     }
-    if(altKeyDown && (state == MP_KEY_PRESS))
+    if(altKeyDown && (state == MP_EVENT_STATE_PRESS))
     {
         if(keyCode == VK_F4)
         {
@@ -237,52 +237,52 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
         {
             case WM_MOUSEMOVE:
             {
-                
+
             } break;
             case WM_LBUTTONDOWN:
             {
-                
+                DispatchMouseEvent(pReceiver, MP_MOUSE_CLICK_LEFT, MP_EVENT_STATE_PRESS);
             } break;
             case WM_LBUTTONUP:
             {
-                
+
             } break;
             case WM_RBUTTONDOWN:
             {
-                
+
             } break;
             case WM_RBUTTONUP:
             {
-                
+
             } break;
             case WM_MBUTTONDOWN:
             {
-                
+
             } break;
             case WM_MBUTTONUP:
             {
-                
+
             } break;
             case WM_MOUSEWHEEL:
             {
-                
+
             } break;
-            
+
             case WM_SYSKEYUP:
             case WM_KEYUP:
             {
                 uint32_t keyCode = (uint32_t)message.wParam;
                 bool32 altKeyDown = (message.lParam & (1 << 29));
-                ProcessKeyEvents(pReceiver, keyCode, MP_KEY_RELEASE, altKeyDown);
+                ProcessKeyEvents(pReceiver, keyCode, MP_EVENT_STATE_RELEASE, altKeyDown);
             } break;
             case WM_KEYDOWN:
             case WM_SYSKEYDOWN:
             {
                 uint32_t keyCode = (uint32_t)message.wParam;
                 bool32 altKeyDown = (message.lParam & (1 << 29));
-                ProcessKeyEvents(pReceiver, keyCode, MP_KEY_PRESS, altKeyDown);
+                ProcessKeyEvents(pReceiver, keyCode, MP_EVENT_STATE_PRESS, altKeyDown);
             } break;
-            
+
             default:
             {
                 TranslateMessage(&message);
@@ -307,6 +307,6 @@ float PlatformUpdateClock(int64_t *lastCounter, int64_t perfCountFrequency)
     QueryPerformanceCounter(&endCounter);
     float result = (float)(endCounter.QuadPart - (*lastCounter)) / (float)perfCountFrequency;
     *lastCounter = endCounter.QuadPart;
-    
+
     return result;
 }

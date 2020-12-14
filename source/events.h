@@ -28,7 +28,7 @@ enum mpMouseEvent
     MP_MOUSE_CLICK_MIDDLE = 0x00000008,
 };
 
-enum mpKeyState { MP_KEY_RELEASE = 0, MP_KEY_PRESS = 1 };
+enum mpEventState { MP_EVENT_STATE_RELEASE = 0, MP_EVENT_STATE_PRESS = 1 };
 
 struct mpEventReceiver
 {
@@ -39,7 +39,7 @@ struct mpEventReceiver
     int32_t mouseX, mouseY, mouseWheel;
 };
 
-inline void DispatchKeyEvent(mpEventReceiver *const pReceiver, mpKeyEvent event, mpKeyState state)
+inline void DispatchKeyEvent(mpEventReceiver *const pReceiver, mpKeyEvent event, mpEventState state)
 {
     if(state)
         pReceiver->keyPressedEvents |= event;
@@ -47,7 +47,7 @@ inline void DispatchKeyEvent(mpEventReceiver *const pReceiver, mpKeyEvent event,
         pReceiver->keyReleasedEvents |= event;
 }
 
-inline void DispatchMouseClick(mpEventReceiver *const pReceiver, mpMouseEvent event, mpKeyState state)
+inline void DispatchMouseEvent(mpEventReceiver *const pReceiver, mpMouseEvent event, mpEventState state)
 {
     if(state)
         pReceiver->mousePressedEvents |= event;
