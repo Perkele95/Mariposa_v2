@@ -22,6 +22,7 @@
 
 #include "memory.h"
 #include "logger.h"
+#include "profiler.h"
 
 #define UINT64MAX 0xFFFFFFFFFFFFFFFF
 #define PI32 3.14159265359f
@@ -87,10 +88,9 @@ struct mpMesh
 {
     mpVertex *vertices;
     uint16_t *indices;
-    size_t verticesSize;
-    size_t indicesSize;
+    mpMemoryRegion *memReg;
+    uint32_t vertexCount;
     uint32_t indexCount;
-    bool32 isEmpty;
 };
 
 struct mpRenderData
@@ -183,7 +183,7 @@ struct mpCameraControls
 
 enum mpRenderFlags
 {
-    MP_RENDER_FLAG_UPDATE_SWAPCHAIN = 0x0001,
+    MP_RENDER_FLAG_REDRAW_MESHES = 0x0001,
 };
 
 struct mpCore

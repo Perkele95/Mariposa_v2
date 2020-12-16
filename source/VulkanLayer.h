@@ -8,7 +8,7 @@
 
 void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion);
 void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion);
-void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount);
+void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t meshCount);
 
 void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index);
 

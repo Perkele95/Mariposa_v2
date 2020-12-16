@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * 
+ *
  */
 
 #ifdef PROFILER_ENABLE
@@ -36,7 +36,7 @@ struct timed_scope
 {
     dbg_record *record;
     uint64_t newCycleCount;
-    
+
     timed_scope(int32_t index, char *fileName, int32_t lineNumber, char *functionName)
     {
         record = &dbgRecs[index];
@@ -45,7 +45,7 @@ struct timed_scope
         record->line = lineNumber;
         newCycleCount = __rdtsc();
     }
-    
+
     ~timed_scope()
     {
         record->cycleCount = __rdtsc() - newCycleCount;
@@ -53,10 +53,10 @@ struct timed_scope
     }
 };
 
-static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
+inline static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
 {
     static uint32_t dbgSamplingCount = samplingLevel;
-    
+
     if(dbgSamplingCount < samplingLevel)
     {
         for(int32_t i = 0; i < globalDbgCounter; i++)

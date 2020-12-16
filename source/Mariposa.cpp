@@ -1,7 +1,6 @@
 #include "core.h"
 #include "Win32_Mariposa.h"
 #include "VulkanLayer.h"
-#include "profiler.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -123,7 +122,7 @@ static mpQuad mpCreateQuadBottom(vec3 offset, vec4 colour, float scale, uint16_t
     return quad;
 }
 // mpCreateMesh resets tempMemory after use.
-static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshMemory, mpMemoryRegion *tempMemory)
+static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory)
 {
     static const float VOXEL_SCALE = 0.5f;
     const uint16_t vertexStride = 4;
@@ -229,15 +228,19 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshMemory, mpMe
         }
     }
     mpMesh mesh = {};
-    mesh.verticesSize = vertexCount * sizeof(mpVertex);
-    mesh.indicesSize = indexCount * sizeof(uint16_t);
-    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(meshMemory, mesh.verticesSize));
-    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(meshMemory, mesh.indicesSize));
+    mesh.vertexCount = vertexCount;
     mesh.indexCount = indexCount;
-    mesh.isEmpty = !(vertexCount && indexCount);
+    mesh.memReg = meshRegion;
 
-    memcpy(mesh.vertices, tempBlockVertices, mesh.verticesSize);
-    memcpy(mesh.indices, tempBlockIndices, mesh.indicesSize);
+    mpResetMemoryRegion(meshRegion);
+    const size_t verticesSize = vertexCount * sizeof(mpVertex);
+    const size_t indicesSize = indexCount * sizeof(uint16_t);
+
+    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(mesh.memReg, verticesSize));
+    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(mesh.memReg, indicesSize));
+
+    memcpy(mesh.vertices, tempBlockVertices, verticesSize);
+    memcpy(mesh.indices, tempBlockIndices, indicesSize);
     mpResetMemoryRegion(tempMemory);
 
     return mesh;
@@ -328,10 +331,8 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
     return chunk;
 }
 
-static mpWorldData mpGenerateWorldData(mpMemoryRegion *chunkMemory)
+static mpWorldData mpGenerateWorldData(const grid3 worldSize, mpMemoryRegion *chunkMemory)
 {
-    const grid3 worldSize = {5, 5, 5};
-
     mpWorldData worldData = {};
     worldData.chunkCount = worldSize.x * worldSize.y * worldSize.z;
     worldData.chunks = static_cast<mpVoxelChunk*>(mpAllocateIntoRegion(chunkMemory, sizeof(mpVoxelChunk) * worldData.chunkCount));
@@ -393,16 +394,18 @@ static mpWorldData mpGenerateWorldData(mpMemoryRegion *chunkMemory)
     return worldData;
 }
 
-static mpRenderData mpGenerateRenderData(const mpWorldData *const worldData, mpMemoryRegion *meshMemory, mpMemoryRegion *tempMemory)
+static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryPool *meshPool, mpMemoryRegion *meshHeaderMemory, mpMemoryRegion *tempMemory)
 {
     mpRenderData renderData = {};
 
     renderData.meshCount = worldData->chunkCount;
-    renderData.meshes = static_cast<mpMesh*>(mpAllocateIntoRegion(meshMemory, sizeof(mpMesh) * renderData.meshCount));
+    renderData.meshes = static_cast<mpMesh*>(mpAllocateIntoRegion(meshHeaderMemory, sizeof(mpMesh) * renderData.meshCount));
 
     for(uint32_t i = 0; i < renderData.meshCount; i++)
-        renderData.meshes[i] = mpCreateMesh(&worldData->chunks[i], meshMemory, tempMemory);
-
+    {
+        mpMemoryRegion *meshRegion = mpGetMemoryRegion(meshPool);
+        renderData.meshes[i] = mpCreateMesh(&worldData->chunks[i], meshRegion, tempMemory);
+    }
     return renderData;
 }
 
@@ -485,28 +488,30 @@ int main(int argc, char *argv[])
 {
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
-    core.name = "Mariposa 3D voxel engine";
+    core.name = "Mariposa 3D Voxel Engine";
 
     PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
-
-    mpMemoryPool bigPool = mpCreateMemoryPool(1, MegaBytes(50), 1);
+    // TODO: allocate pool header on heap as well
     mpMemoryPool smallPool = mpCreateMemoryPool(10, MegaBytes(10), 2);
 
-    mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *chunkMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *meshHeaderMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&smallPool);
-    mpMemoryRegion *meshMemory = mpGetMemoryRegion(&bigPool);
 
-    core.worldData = mpGenerateWorldData(chunkMemory);
-    core.renderData = mpGenerateRenderData(&core.worldData, meshMemory, tempMemory);
+    const grid3 worldSize = {5, 5, 5};
+    core.worldData = mpGenerateWorldData(worldSize, chunkMemory);
 
+    mpMemoryPool meshPool = mpCreateMemoryPool(core.worldData.chunkCount, MegaBytes(2), 42);
+    core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, meshHeaderMemory, tempMemory);
+
+    mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory);
 
-    MP_LOG_TRACE
-    printf("chunkMemory uses %zu out of %zu kB\n", (chunkMemory->dataSize / 1000), (chunkMemory->regionSize) / 1000);
-    printf("meshMemory uses %zu out of %zu kB\n", (meshMemory->dataSize / 1000), (meshMemory->regionSize) / 1000);
+    // MP_LOG_TRACE
+    // printf("chunkMemory uses %zu out of %zu kB\n", (chunkMemory->dataSize / 1000), (chunkMemory->regionSize) / 1000);
+    // printf("meshMemory uses %zu out of %zu kB\n", (meshMemory->dataSize / 1000), (meshMemory->regionSize) / 1000);
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
@@ -573,10 +578,10 @@ int main(int argc, char *argv[])
             {
                 // TODO: need a drawFlags function that sets flags for a single voxel instead of redoing the whole chunk
                 core.worldData.chunks[i] = mpSetDrawFlags(core.worldData.chunks[i]);
-                core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], meshMemory, tempMemory);
+                core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory);
                 core.worldData.chunks[i].flags ^= CHUNK_FLAG_IS_DIRTY;
                 mpVulkanRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
-                core.renderFlags |= MP_RENDER_FLAG_UPDATE_SWAPCHAIN;
+                core.renderFlags |= MP_RENDER_FLAG_REDRAW_MESHES;
             }
         }
 
@@ -591,7 +596,7 @@ int main(int argc, char *argv[])
 
     mpVulkanCleanup(&core.rendererHandle, core.renderData.meshCount);
 
-    mpDestroyMemoryPool(&bigPool);
+    mpDestroyMemoryPool(&meshPool);
     mpDestroyMemoryPool(&smallPool);
 
     return 0;
