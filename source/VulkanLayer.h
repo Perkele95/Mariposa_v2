@@ -36,6 +36,10 @@ struct UniformbufferObject
     alignas(16) mat4x4 Model;
     alignas(16) mat4x4 View;
     alignas(16) mat4x4 Proj;
+
+	vec3 position;
+	vec3 colour;
+	float ambient;
 };
 
 struct mpVkRenderer

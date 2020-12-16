@@ -6,6 +6,10 @@ layout(binding = 0) uniform UniformbufferObject
 	mat4 Model;
 	mat4 View;
 	mat4 Proj;
+
+	vec3 position;
+	vec3 colour;
+	float ambient;
 } ubo;
 
 layout(location = 0) in vec3 inPosition;
@@ -15,8 +19,9 @@ layout(location = 2) in vec4 inColour;
 layout(location = 0) out vec3 fragPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec4 fragColour;
-layout(location = 3) out vec3 lightPos;
-layout(location = 4) out vec3 lightColour;
+layout(location = 3) out vec3 fragGlobalLightPosition;
+layout(location = 4) out vec3 fragGlobalLightColour;
+layout(location = 5) out float fragAmbient;
 
 void main()
 {
@@ -24,6 +29,7 @@ void main()
 	fragPosition = inPosition;
 	fragNormal = inNormal;
 	fragColour = inColour;
-	lightPos = vec3(0.0, 0.0, 20.0);
-	lightColour = vec3(1.0, 1.0, 1.0);
+	fragGlobalLightPosition = ubo.position;
+	fragGlobalLightColour = ubo.colour;
+    fragAmbient = ubo.ambient;
 }

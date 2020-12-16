@@ -186,6 +186,13 @@ enum mpRenderFlags
     MP_RENDER_FLAG_REDRAW_MESHES = 0x0001,
 };
 
+struct mpGlobalLight
+{
+    vec3 position;
+    vec3 colour;
+    float ambient;
+};
+
 struct mpCore
 {
     const char *name;
@@ -201,4 +208,6 @@ struct mpCore
 
     mpWorldData worldData;
     mpRenderData renderData;
+
+    mpGlobalLight globalLight;
 };

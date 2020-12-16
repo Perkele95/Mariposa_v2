@@ -1195,11 +1195,14 @@ static void DrawMeshes(mpHandle rendererHandle, mpRenderData *renderData)
     }
 }
 
-static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uint32_t imageIndex)
+static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpGlobalLight *gLight, uint32_t imageIndex)
 {
     renderer->ubo.Model = camera->model;
     renderer->ubo.View = camera->view;
     renderer->ubo.Proj = camera->projection;
+    renderer->ubo.ambient = gLight->ambient;
+    renderer->ubo.position = gLight->position;
+    renderer->ubo.colour = gLight->colour;
 
     void* data;
     VkDeviceSize dataSize = sizeof(renderer->ubo);
@@ -1229,7 +1232,7 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
         printf("Failed to acquire swap chain image!");
     }
 
-    UpdateUBOs(renderer, &core->camera, imageIndex);
+    UpdateUBOs(renderer, &core->camera, &core->globalLight, imageIndex);
 
     if(renderer->pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(renderer->device, 1, &renderer->pInFlightImageFences[imageIndex], VK_TRUE, UINT64MAX);

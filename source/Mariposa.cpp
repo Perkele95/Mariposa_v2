@@ -291,37 +291,43 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
                     localCheck = chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
                     localCheck = chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_SOUTH;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_SOUTH;
 
                 if(x < max)
                     localCheck = chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
                     localCheck = chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_NORTH;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_NORTH;
 
                 if(y > 0)
                     localCheck = chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
                     localCheck = chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_WEST;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_WEST;
 
                 if(y < max)
                     localCheck = chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
                     localCheck = chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_EAST;
 
                 if(z > 0)
                     localCheck = chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
                     localCheck = chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_BOTTOM;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_BOTTOM;
 
                 if(z < max)
                     localCheck = chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
                     localCheck = chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
-                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_TOP;
+                if(localCheck == false)
+                    voxelFlags |= VOXEL_FLAG_DRAW_TOP;
 
                 chunk.pBlocks[x][y][z].flags = voxelFlags;
             }
@@ -484,6 +490,11 @@ static mpVoxel* mpRaycast(mpCamera *cam, mpWorldData *worldData, vec3 direction)
     return result;
 }
 
+inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
+{
+    printf("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000);
+}
+
 int main(int argc, char *argv[])
 {
     mpCore core;
@@ -509,9 +520,10 @@ int main(int argc, char *argv[])
     mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory);
 
-    // MP_LOG_TRACE
-    // printf("chunkMemory uses %zu out of %zu kB\n", (chunkMemory->dataSize / 1000), (chunkMemory->regionSize) / 1000);
-    // printf("meshMemory uses %zu out of %zu kB\n", (meshMemory->dataSize / 1000), (meshMemory->regionSize) / 1000);
+    MP_LOG_TRACE
+    mpPrintMemoryInfo(chunkMemory, "chunkmemory");
+    mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
+    mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
@@ -519,6 +531,10 @@ int main(int argc, char *argv[])
     core.camera.model = Mat4x4Identity();
     core.camera.position = vec3{12.0f, 12.0f, 12.0f};
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
+
+    core.globalLight.ambient = 0.2f;
+    core.globalLight.position = {10.0f, 10.0f, 50.0f};
+    core.globalLight.colour = {1.0f, 1.0f, 1.0f};
 
     core.fpsSampler.level = 1000;
 
