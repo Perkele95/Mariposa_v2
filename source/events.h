@@ -18,6 +18,7 @@ enum mpKeyEvent
     MP_KEY_ESCAPE = 0x00000800,
     MP_KEY_CONTROL = 0x00001000,
     MP_KEY_SHIFT = 0x00002000,
+    MP_KEY_F = 0x00004000,
 };
 
 enum mpMouseEvent

@@ -1,5 +1,5 @@
 #include "Win32_Mariposa.h"
-#include "..\Vulkan\Include\vulkan\vulkan_win32.h"
+#include "vulkan\vulkan_win32.h"
 
 static WINDOWPLACEMENT gWindowPlacement = { sizeof(WINDOWPLACEMENT) };
 static mpWindowData *gWin32WindowData = nullptr;
@@ -188,6 +188,9 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpEve
         break;
     case 'E':
         DispatchKeyEvent(pReceiver, MP_KEY_E, state);
+        break;
+    case 'F':
+        DispatchKeyEvent(pReceiver, MP_KEY_F, state);
         break;
     case VK_UP:
         DispatchKeyEvent(pReceiver, MP_KEY_UP, state);

@@ -3,12 +3,14 @@
 #include "core.h"
 
 #ifdef _WIN32
-#include "..\Vulkan\Include\vulkan\vulkan_win32.h"
+#include "vulkan\vulkan_win32.h"
 #endif
 
 void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion);
 void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion);
 void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount);
+
+void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index);
 
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
 

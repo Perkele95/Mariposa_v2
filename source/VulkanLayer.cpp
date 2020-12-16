@@ -1,5 +1,5 @@
 #include "VulkanLayer.h"
-#include <string.h>
+#include "C:\Users\arlev\Documents\GitHub\Mariposa_v2\1.2.162.0\Include\vulkan\vulkan.h"
 #include <stdio.h>
 // TODO: static global variables
 const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
@@ -1040,16 +1040,16 @@ void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion)
     PrepareShaderModules(renderer, &core->callbacks);
     PrepareVkPipeline(renderer);
 
-    renderer->pFramebuffers =          reinterpret_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanRegion, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbuffers =        reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbufferMemories = reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
-    renderer->pCommandbuffers =        reinterpret_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
-    renderer->pInFlightImageFences =   reinterpret_cast<VkFence*>(        mpAllocateIntoRegion(vulkanRegion, sizeof(VkFence) * renderer->swapChainImageCount));
-    renderer->pDescriptorSets =        reinterpret_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
-    renderer->indexbuffers =           reinterpret_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
-    renderer->vertexbufferMemories =   reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
-    renderer->indexbufferMemories =    reinterpret_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanRegion, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   static_cast<VkFence*>(        mpAllocateIntoRegion(vulkanRegion, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->vertexbuffers =          static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->indexbuffers =           static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
 
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, &core->renderData);
@@ -1092,6 +1092,50 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *render
     PrepareVkPipeline(renderer);
     PrepareVkFrameBuffers(renderer);
     PrepareVkCommandbuffers(renderer, renderData);
+}
+// Recreates geometry buffers and signals vulkanupdate to recreate swapchain
+void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index)
+{
+    mpVkRenderer *renderer = static_cast<mpVkRenderer*>(rendererHandle);
+
+    const uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    const VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+    const VkDeviceSize vertbufferSize = mesh->verticesSize;
+    const VkDeviceSize indexbufferSize = mesh->indicesSize;
+    VkBuffer vertStagingbuffer, indexStagingbuffer;
+    VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
+    void *vertData, *indexData;
+
+    CreateBuffer(renderer, vertbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &vertStagingbuffer, &vertStagingbufferMemory);
+    CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
+    vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
+    vkMapMemory(renderer->device, indexStagingbufferMemory, 0, indexbufferSize, 0, &indexData);
+    memcpy(vertData, mesh->vertices, static_cast<size_t>(vertbufferSize));
+    memcpy(indexData, mesh->indices, static_cast<size_t>(indexbufferSize));
+    vkUnmapMemory(renderer->device, vertStagingbufferMemory);
+    vkUnmapMemory(renderer->device, indexStagingbufferMemory);
+
+    CreateBuffer(renderer, vertbufferSize, vertUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->vertexbuffers[index], &renderer->vertexbufferMemories[index]);
+    CreateBuffer(renderer, indexbufferSize, indexUsageDstFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &renderer->indexbuffers[index], &renderer->indexbufferMemories[index]);
+
+    VkCommandBuffer cmdBuffer = BeginSingleTimeCommands(renderer);
+    VkBufferCopy copyRegion = {};
+    copyRegion.size = vertbufferSize;
+    vkCmdCopyBuffer(cmdBuffer, vertStagingbuffer, renderer->vertexbuffers[index], 1, &copyRegion);
+    EndSingleTimeCommands(renderer, cmdBuffer);
+
+    cmdBuffer = BeginSingleTimeCommands(renderer);
+    copyRegion = {};
+    copyRegion.size = indexbufferSize;
+    vkCmdCopyBuffer(cmdBuffer, indexStagingbuffer, renderer->indexbuffers[index], 1, &copyRegion);
+    EndSingleTimeCommands(renderer, cmdBuffer);
+
+    vkDestroyBuffer(renderer->device, vertStagingbuffer, nullptr);
+    vkDestroyBuffer(renderer->device, indexStagingbuffer, nullptr);
+    vkFreeMemory(renderer->device, vertStagingbufferMemory, nullptr);
+    vkFreeMemory(renderer->device, indexStagingbufferMemory, nullptr);
 }
 
 static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *const camera, uint32_t imageIndex)
@@ -1165,10 +1209,14 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
     presentInfo.pImageIndices = &imageIndex;
 
     VkResult presentResult = vkQueuePresentKHR(renderer->presentQueue, &presentInfo);
-    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || core->windowInfo.hasResized)
+    if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || core->windowInfo.hasResized || core->renderFlags & MP_RENDER_FLAG_UPDATE_SWAPCHAIN)
+    {
         RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height);
+        core->renderFlags &= ~MP_RENDER_FLAG_UPDATE_SWAPCHAIN;
+        puts("Updated swapchain");
+    }
     else if(presentResult != VK_SUCCESS)
-        printf("Failed to present swap chain image!\n");
+        puts("Failed to present swap chain image!");
 
     renderer->currentFrame = (renderer->currentFrame + 1) % MP_MAX_IMAGES_IN_FLIGHT;
 }
@@ -1177,6 +1225,7 @@ void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t batchCount)
 {
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(*rendererHandle);
 
+    vkDeviceWaitIdle(renderer->device);
     CleanupSwapChain(renderer);
 
     vkDestroyShaderModule(renderer->device, renderer->vertShaderModule, nullptr);

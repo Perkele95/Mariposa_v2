@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-enum GlobalConstants
+enum mpGlobalConstants
 {
     MP_CHUNK_SIZE = 20,
 };
@@ -272,54 +272,55 @@ static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
 // Loops through all blocks in a chunk and decides which faces need to be drawn based on neighbours active status
 static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
 {
-    uint32_t max = MP_CHUNK_SIZE - 1;
+    const uint32_t max = MP_CHUNK_SIZE - 1;
     bool32 localCheck = 0;
+    uint32_t voxelFlags = 0;
 
     for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++){
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++)
             {
-                mpVoxel currentBlock = chunk.pBlocks[x][y][z];
-                if((currentBlock.flags & VOXEL_FLAG_ACTIVE) == false)
+                voxelFlags = chunk.pBlocks[x][y][z].flags;
+                if((voxelFlags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
                 if(x > 0)
                     localCheck = chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
                     localCheck = chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_SOUTH;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_SOUTH;
 
                 if(x < max)
                     localCheck = chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
                     localCheck = chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_NORTH;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_NORTH;
 
                 if(y > 0)
                     localCheck = chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
                     localCheck = chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_WEST;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_WEST;
 
                 if(y < max)
                     localCheck = chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
                     localCheck = chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_EAST;
 
                 if(z > 0)
                     localCheck = chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
                     localCheck = chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_BOTTOM;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_BOTTOM;
 
                 if(z < max)
                     localCheck = chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
                     localCheck = chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
-                currentBlock.flags |= localCheck ? 0 : VOXEL_FLAG_DRAW_TOP;
+                voxelFlags |= localCheck ? 0 : VOXEL_FLAG_DRAW_TOP;
 
-                chunk.pBlocks[x][y][z] = currentBlock;
+                chunk.pBlocks[x][y][z].flags = voxelFlags;
             }
         }
     }
@@ -506,7 +507,6 @@ int main(int argc, char *argv[])
     MP_LOG_TRACE
     printf("chunkMemory uses %zu out of %zu kB\n", (chunkMemory->dataSize / 1000), (chunkMemory->regionSize) / 1000);
     printf("meshMemory uses %zu out of %zu kB\n", (meshMemory->dataSize / 1000), (meshMemory->regionSize) / 1000);
-    mpResetMemoryRegion(meshMemory);
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
@@ -547,6 +547,7 @@ int main(int argc, char *argv[])
         // Update view & projection matrices
         const vec3 front = {cosf(core.camera.pitch) * cosf(core.camera.yaw), cosf(core.camera.pitch) * sinf(core.camera.yaw), sinf(core.camera.pitch)};
         const vec3 left = {sinf(core.camera.yaw), -cosf(core.camera.yaw), 0.0f};
+        const vec3 up = {0.0f, 0.0f, 1.0f};
         if(core.camControls.tForward)
             core.camera.position += front * core.camera.speed * timestep;
         else if(core.camControls.tBackward)
@@ -556,12 +557,12 @@ int main(int argc, char *argv[])
         else if(core.camControls.tRight)
             core.camera.position += left * core.camera.speed * timestep;
 
-        core.camera.view = LookAt(core.camera.position, core.camera.position + front, {0.0f, 0.0f, 1.0f});
+        core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
-        if(core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT)
+        if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
         {
-            mpVoxel *raycastHit = mpRaycast(&core.camera, &core.worldData, front);
+            mpVoxel *raycastHit = mpRaycast(&core.camera, &core.worldData, front * 3.0f);
             if(raycastHit)
                 raycastHit->flags ^= VOXEL_FLAG_ACTIVE;
         }
@@ -570,8 +571,12 @@ int main(int argc, char *argv[])
         {
             if(core.worldData.chunks[i].flags & CHUNK_FLAG_IS_DIRTY)
             {
+                // TODO: need a drawFlags function that sets flags for a single voxel instead of redoing the whole chunk
+                core.worldData.chunks[i] = mpSetDrawFlags(core.worldData.chunks[i]);
                 core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], meshMemory, tempMemory);
                 core.worldData.chunks[i].flags ^= CHUNK_FLAG_IS_DIRTY;
+                mpVulkanRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
+                core.renderFlags |= MP_RENDER_FLAG_UPDATE_SWAPCHAIN;
             }
         }
 

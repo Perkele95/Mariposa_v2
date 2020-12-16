@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include <cstring>
-#include "..\Vulkan\Include\vulkan\vulkan.h"
+#include "vulkan\vulkan.h"
 #include "mp_maths.h"
 #include "events.h"
 
@@ -181,10 +181,16 @@ struct mpCameraControls
     bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
 };
 
+enum mpRenderFlags
+{
+    MP_RENDER_FLAG_UPDATE_SWAPCHAIN = 0x0001,
+};
+
 struct mpCore
 {
     const char *name;
     mpHandle rendererHandle;
+    uint32_t renderFlags;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
     mpFPSsampler fpsSampler;
