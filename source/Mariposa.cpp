@@ -452,42 +452,51 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
 }
 
 // NOTE: could perhaps return raycasthit data or smth
-static mpVoxel* mpRaycast(mpCamera *cam, mpWorldData *worldData, vec3 direction)
+static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 direction)
 {
-    const vec3 chunkDiagonal = {MP_CHUNK_SIZE, MP_CHUNK_SIZE, MP_CHUNK_SIZE};
-    vec3 raycastHit = cam->position + direction;
+    const vec3 diagonal = {MP_CHUNK_SIZE, MP_CHUNK_SIZE, MP_CHUNK_SIZE};
+    const uint32_t stepCount = 10;
 
-    mpVoxel *result = nullptr;
-    for(uint32_t i = 0; i < worldData->chunkCount; i++)
+    mpVoxel *result = nullptr, *previous = nullptr;
+    for(uint32_t step = 1; step <= stepCount; step++)
     {
-        const vec3 chunkCorner = worldData->chunks[i].position + chunkDiagonal;
-        // Simple bounding box search to find which chunk the destination is located within
-        if(raycastHit.x < worldData->chunks[i].position.x)
-            continue;
-        if(raycastHit.x > chunkCorner.x)
-            continue;
+        vec3 raycastHit = origin + direction * static_cast<float>(step);
+        for(uint32_t i = 0; i < worldData->chunkCount; i++)
+        {
+            const vec3 chunkCorner = worldData->chunks[i].position + diagonal;
+            // Simple bounding box search to find which chunk the destination is located within
+            if(raycastHit.x < worldData->chunks[i].position.x)
+                continue;
+            if(raycastHit.x > chunkCorner.x)
+                continue;
 
-        if(raycastHit.y < worldData->chunks[i].position.y)
-            continue;
-        if(raycastHit.y > chunkCorner.y)
-            continue;
+            if(raycastHit.y < worldData->chunks[i].position.y)
+                continue;
+            if(raycastHit.y > chunkCorner.y)
+                continue;
 
-        if(raycastHit.z < worldData->chunks[i].position.z)
-            continue;
-        if(raycastHit.z > chunkCorner.z)
-            continue;
+            if(raycastHit.z < worldData->chunks[i].position.z)
+                continue;
+            if(raycastHit.z > chunkCorner.z)
+                continue;
 
-        // Convert raycastHit to local chunk space
-        raycastHit -= worldData->chunks[i].position;
-        // Use that as indices to the pBlocks array
-        const uint32_t x = static_cast<uint32_t>(raycastHit.x);
-        const uint32_t y = static_cast<uint32_t>(raycastHit.y);
-        const uint32_t z = static_cast<uint32_t>(raycastHit.z);
-        result = &worldData->chunks[i].pBlocks[x][y][z];
-        worldData->chunks[i].flags |= CHUNK_FLAG_IS_DIRTY;
-        break;
+            // Convert raycastHit to local chunk space
+            raycastHit -= worldData->chunks[i].position;
+            const uint32_t x = static_cast<uint32_t>(raycastHit.x);
+            const uint32_t y = static_cast<uint32_t>(raycastHit.y);
+            const uint32_t z = static_cast<uint32_t>(raycastHit.z);
+
+            previous = result;
+            result = &worldData->chunks[i].pBlocks[x][y][z];
+            worldData->chunks[i].flags |= CHUNK_FLAG_IS_DIRTY;
+            if(result->flags & VOXEL_FLAG_ACTIVE)
+            {
+                return previous;
+            }
+            break;
+        }
     }
-    return result;
+    return nullptr;
 }
 
 inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
@@ -583,7 +592,7 @@ int main(int argc, char *argv[])
 
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
         {
-            mpVoxel *raycastHit = mpRaycast(&core.camera, &core.worldData, front * 3.0f);
+            mpVoxel *raycastHit = mpRaycast(&core.worldData, core.camera.position, front);
             if(raycastHit)
                 raycastHit->flags ^= VOXEL_FLAG_ACTIVE;
         }
@@ -607,7 +616,7 @@ int main(int argc, char *argv[])
         ResetEventReceiver(&core.eventReceiver);
         timestep = PlatformUpdateClock(&lastCounter, perfCountFrequency);
         UpdateFpsSampler(&core.fpsSampler, timestep);
-        mpDbgProcessSampledRecords(5000);
+        mpDbgProcessSampledRecords(2000);
     }
 
     mpVulkanCleanup(&core.rendererHandle, core.renderData.meshCount);
