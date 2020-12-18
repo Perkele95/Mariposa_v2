@@ -211,3 +211,10 @@ struct mpCore
 
     mpGlobalLight globalLight;
 };
+
+struct mpEntity
+{
+    vec3 position, velocity;
+    float mass;
+    uint32_t reserved;
+};
