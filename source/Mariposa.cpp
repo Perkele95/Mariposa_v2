@@ -30,89 +30,86 @@ static mpVoxelChunk mpAllocateChunk(mpMemoryRegion *memory)
     return chunk;
 }
 
-static mpQuad mpCreateQuadNorth(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+constexpr static mpQuadFaceArray mpQuadFaceNorth()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalNorth =  {1.0f, 0.0f, 0.0f};
-    quad.vertices[0] = {vec3{ scale, -scale,  scale} + offset, normalNorth, colour};
-    quad.vertices[1] = {vec3{ scale, -scale, -scale} + offset, normalNorth, colour};
-    quad.vertices[2] = {vec3{ scale,  scale, -scale} + offset, normalNorth, colour};
-    quad.vertices[3] = {vec3{ scale,  scale,  scale} + offset, normalNorth, colour};
-    constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
-    for(uint16_t index = 0; index < 6; index++)
-        quad.indices[index] = quadIndices[index] + indexOffset;
-
-    return quad;
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{ scale, -scale,  scale},
+    vec3{ scale, -scale, -scale},
+    vec3{ scale,  scale, -scale},
+    vec3{ scale,  scale,  scale},
+    vec3{1.0f, 0.0f, 0.0f}};
+    return arr;
 }
 
-static mpQuad mpCreateQuadSouth(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+constexpr static mpQuadFaceArray mpQuadFaceSouth()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalSouth =  {-1.0f, 0.0f, 0.0f};
-    quad.vertices[0] = {vec3{-scale,  scale,  scale} + offset, normalSouth, colour};
-    quad.vertices[1] = {vec3{-scale,  scale, -scale} + offset, normalSouth, colour};
-    quad.vertices[2] = {vec3{-scale, -scale, -scale} + offset, normalSouth, colour};
-    quad.vertices[3] = {vec3{-scale, -scale,  scale} + offset, normalSouth, colour};
-    constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
-    for(uint16_t index = 0; index < 6; index++)
-        quad.indices[index] = quadIndices[index] + indexOffset;
-
-    return quad;
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{-scale,  scale,  scale},
+    vec3{-scale,  scale, -scale},
+    vec3{-scale, -scale, -scale},
+    vec3{-scale, -scale,  scale},
+    vec3{-1.0f, 0.0f, 0.0f}};
+    return arr;
 }
 
-static mpQuad mpCreateQuadEast(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+constexpr static mpQuadFaceArray mpQuadFaceEast()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalEast =  {0.0f, 1.0f, 0.0f};
-    quad.vertices[0] = {vec3{ scale,  scale,  scale} + offset, normalEast, colour};
-    quad.vertices[1] = {vec3{ scale,  scale, -scale} + offset, normalEast, colour};
-    quad.vertices[2] = {vec3{-scale,  scale, -scale} + offset, normalEast, colour};
-    quad.vertices[3] = {vec3{-scale,  scale,  scale} + offset, normalEast, colour};
-    constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
-    for(uint16_t index = 0; index < 6; index++)
-        quad.indices[index] = quadIndices[index] + indexOffset;
-
-    return quad;
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{ scale,  scale,  scale},
+    vec3{ scale,  scale, -scale},
+    vec3{-scale,  scale, -scale},
+    vec3{-scale,  scale,  scale},
+    vec3{0.0f, 1.0f, 0.0f}};
+    return arr;
 }
 
-static mpQuad mpCreateQuadWest(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+constexpr static mpQuadFaceArray mpQuadFaceWest()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalWest =  {0.0f, -1.0f, 0.0f};
-    quad.vertices[0] = {vec3{-scale, -scale,  scale} + offset, normalWest, colour};
-    quad.vertices[1] = {vec3{-scale, -scale, -scale} + offset, normalWest, colour};
-    quad.vertices[2] = {vec3{ scale, -scale, -scale} + offset, normalWest, colour};
-    quad.vertices[3] = {vec3{ scale, -scale,  scale} + offset, normalWest, colour};
-    constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
-    for(uint16_t index = 0; index < 6; index++)
-        quad.indices[index] = quadIndices[index] + indexOffset;
-
-    return quad;
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{-scale, -scale,  scale},
+    vec3{-scale, -scale, -scale},
+    vec3{ scale, -scale, -scale},
+    vec3{ scale, -scale,  scale},
+    vec3{0.0f, -1.0f, 0.0f}};
+    return arr;
 }
 
-static mpQuad mpCreateQuadTop(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+constexpr static mpQuadFaceArray mpQuadFaceTop()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalTop = {0.0f, 0.0f, 1.0f};
-    quad.vertices[0] = {vec3{-scale, -scale,  scale} + offset, normalTop, colour};
-    quad.vertices[1] = {vec3{ scale, -scale,  scale} + offset, normalTop, colour};
-    quad.vertices[2] = {vec3{ scale,  scale,  scale} + offset, normalTop, colour};
-    quad.vertices[3] = {vec3{-scale,  scale,  scale} + offset, normalTop, colour};
-    constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
-    for(uint16_t index = 0; index < 6; index++)
-        quad.indices[index] = quadIndices[index] + indexOffset;
-
-    return quad;
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{-scale, -scale,  scale},
+    vec3{ scale, -scale,  scale},
+    vec3{ scale,  scale,  scale},
+    vec3{-scale,  scale,  scale},
+    vec3{0.0f, 0.0f, 1.0f}};
+    return arr;
 }
-// TODO: consider creating a general purpose quad creation function that takes in some structure and spits out a quad
-static mpQuad mpCreateQuadBottom(vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+
+constexpr static mpQuadFaceArray mpQuadFaceBottom()
 {
-    mpQuad quad = {};
-    constexpr vec3 normalBottom =  {0.0f, 0.0f, -1.0f};
-    quad.vertices[0] = {vec3{-scale,  scale, -scale} + offset, normalBottom, colour};
-    quad.vertices[1] = {vec3{ scale,  scale, -scale} + offset, normalBottom, colour};
-    quad.vertices[2] = {vec3{ scale, -scale, -scale} + offset, normalBottom, colour};
-    quad.vertices[3] = {vec3{-scale, -scale, -scale} + offset, normalBottom, colour};
+    constexpr float scale = 1.0f;
+    constexpr mpQuadFaceArray arr = {
+    vec3{-scale,  scale, -scale},
+    vec3{ scale,  scale, -scale},
+    vec3{ scale, -scale, -scale},
+    vec3{-scale, -scale, -scale},
+    vec3{0.0f, 0.0f, -1.0f}};
+    return arr;
+}
+
+static mpQuad mpCreateQuad(mpQuadFaceArray (*getQuadFace)(), vec3 offset, vec4 colour, float scale, uint16_t indexOffset)
+{
+    mpQuad quad;
+    const mpQuadFaceArray quadFace = getQuadFace();
+    quad.vertices[0] = {(quadFace.data[0] * scale) + offset, quadFace.normal, colour};
+    quad.vertices[1] = {(quadFace.data[1] * scale) + offset, quadFace.normal, colour};
+    quad.vertices[2] = {(quadFace.data[2] * scale) + offset, quadFace.normal, colour};
+    quad.vertices[3] = {(quadFace.data[3] * scale) + offset, quadFace.normal, colour};
     constexpr uint16_t quadIndices[] = {0, 1, 2, 2, 3, 0};
     for(uint16_t index = 0; index < 6; index++)
         quad.indices[index] = quadIndices[index] + indexOffset;
@@ -154,7 +151,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
 
                 if(drawFlags & VOXEL_FLAG_DRAW_NORTH)
                 {
-                    const mpQuad quad = mpCreateQuadNorth(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceNorth, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -166,7 +163,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_SOUTH)
                 {
-                    const mpQuad quad = mpCreateQuadSouth(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceSouth, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -178,7 +175,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_EAST)
                 {
-                    const mpQuad quad = mpCreateQuadEast(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceEast, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -190,7 +187,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_WEST)
                 {
-                    const mpQuad quad = mpCreateQuadWest(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceWest, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -202,7 +199,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_TOP)
                 {
-                    const mpQuad quad = mpCreateQuadTop(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceTop, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -214,7 +211,7 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
                 }
                 if(drawFlags & VOXEL_FLAG_DRAW_BOTTOM)
                 {
-                    const mpQuad quad = mpCreateQuadBottom(positionOffset, colour, VOXEL_SCALE, vertexCount);
+                    const mpQuad quad = mpCreateQuad(mpQuadFaceBottom, positionOffset, colour, VOXEL_SCALE, vertexCount);
 
                     memcpy(tempBlockVertIncrementer, quad.vertices, sizeof(mpVertex) * vertexStride);
                     memcpy(tempBlockIndexIncrementer, quad.indices, sizeof(uint16_t) * indexStride);
@@ -250,8 +247,8 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
 
 inline static bool32 mpVoxelIsAboveSurfaceFunc(vec3 position, float (*noise)(float x, float y))
 {
-    const float surfaceLevel = 40.0f;
-    const float noiseFactor = 200.0f;
+    constexpr float surfaceLevel = 40.0f;
+    constexpr float noiseFactor = 200.0f;
     const float height = surfaceLevel + noiseFactor * noise(position.x * noiseFactor, position.y * noiseFactor);
     return position.z > height;
 }
@@ -461,59 +458,11 @@ inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
         sampler->value = 0;
     }
 }
-
-// NOTE: could perhaps return raycasthit data or smth
-static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 direction)
+// Returns the chunk that contains position
+inline static mpVoxelChunk* mpChunkBoundsCheck(const mpWorldData *worldData, vec3 position)
 {
     constexpr vec3 diagonal = {MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1};
-    constexpr uint32_t stepCount = 10;
-
-    mpVoxel *result = nullptr, *previous = nullptr;
-    for(uint32_t step = 1; step <= stepCount; step++)
-    {
-        vec3 raycastHit = origin + direction * static_cast<float>(step);
-        for(uint32_t i = 0; i < worldData->chunkCount; i++)
-        {
-            const vec3 chunkCorner = worldData->chunks[i].position + diagonal;
-            // Simple bounding box search to find which chunk the destination is located within
-            if(raycastHit.x < worldData->chunks[i].position.x)
-                continue;
-            if(raycastHit.x > chunkCorner.x)
-                continue;
-
-            if(raycastHit.y < worldData->chunks[i].position.y)
-                continue;
-            if(raycastHit.y > chunkCorner.y)
-                continue;
-
-            if(raycastHit.z < worldData->chunks[i].position.z)
-                continue;
-            if(raycastHit.z > chunkCorner.z)
-                continue;
-
-            // Convert raycastHit to local chunk space
-            raycastHit -= worldData->chunks[i].position;
-            const uint32_t x = static_cast<uint32_t>(raycastHit.x);
-            const uint32_t y = static_cast<uint32_t>(raycastHit.y);
-            const uint32_t z = static_cast<uint32_t>(raycastHit.z);
-
-            previous = result;
-            result = &worldData->chunks[i].pBlocks[x][y][z];
-            worldData->chunks[i].flags |= CHUNK_FLAG_IS_DIRTY;
-            if(result->flags & VOXEL_FLAG_ACTIVE)
-            {
-                return previous;
-            }
-            break;
-        }
-    }
-    return nullptr;
-}
-
-static bool32 mpEntityIsGrounded(const mpWorldData *const worldData, vec3 position)
-{   // TODO: put some of this into a voxelcheck function
-    constexpr vec3 diagonal = {MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1};
-    bool32 result = false;
+    mpVoxelChunk *result = nullptr;
     for(uint32_t i = 0; i < worldData->chunkCount; i++)
     {
         const vec3 chunkCorner = worldData->chunks[i].position + diagonal;
@@ -533,13 +482,63 @@ static bool32 mpEntityIsGrounded(const mpWorldData *const worldData, vec3 positi
         if(position.z > chunkCorner.z)
             continue;
 
-        // Convert position to local chunk space
-        position -= worldData->chunks[i].position;
+        result = &worldData->chunks[i];
+        break;
+    }
+    return result;
+}
+// NOTE: could perhaps return raycasthit data or smth
+static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 direction)
+{
+    constexpr uint32_t stepCount = 10;
+
+    mpVoxel *result = nullptr, *previous = nullptr;
+    for(uint32_t step = 1; step <= stepCount; step++)
+    {
+        vec3 raycastHit = origin + direction * static_cast<float>(step);
+
+        mpVoxelChunk *chunk = mpChunkBoundsCheck(worldData, raycastHit);
+        if(chunk != nullptr)
+        {
+            // Convert raycastHit to local chunk space
+            raycastHit -= chunk->position;
+            const uint32_t x = static_cast<uint32_t>(raycastHit.x);
+            const uint32_t y = static_cast<uint32_t>(raycastHit.y);
+            const uint32_t z = static_cast<uint32_t>(raycastHit.z);
+
+            previous = result;
+            result = &chunk->pBlocks[x][y][z];
+            chunk->flags |= CHUNK_FLAG_IS_DIRTY;
+            if(result->flags & VOXEL_FLAG_ACTIVE)
+            {
+                result = previous;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+static bool32 mpEntityIsGrounded(const mpWorldData *worldData, vec3 position)
+{
+    bool32 result = false;
+    mpVoxelChunk *chunk = mpChunkBoundsCheck(worldData, position);
+    if(chunk != nullptr)
+    {
+        position -= chunk->position;
+
+        position.x = position.x >= 0 ? position.x : 0;
+        position.y = position.y >= 0 ? position.y : 0;
+        position.z = position.z >= 0 ? position.z : 0;
         const uint32_t x = static_cast<uint32_t>(position.x);
         const uint32_t y = static_cast<uint32_t>(position.y);
         const uint32_t z = static_cast<uint32_t>(position.z);
-
-        result = worldData->chunks[i].pBlocks[x][y][z].flags & VOXEL_FLAG_ACTIVE;
+        result = chunk->pBlocks[x][y][z].flags & VOXEL_FLAG_ACTIVE;
+    }
+    else
+    {
+        MP_LOG_ERROR
+        puts("GROUND CHECK ERROR: Entity out of world bounds");
     }
     return result;
 }
@@ -559,13 +558,13 @@ int main(int argc, char *argv[])
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
     // TODO: allocate pool header on heap as well
-    mpMemoryPool smallPool = mpCreateMemoryPool(6, MegaBytes(10), 2);
+    mpMemoryPool smallPool = mpCreateMemoryPool(6, MegaBytes(40), 2);
 
     mpMemoryRegion *chunkMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *meshHeaderMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&smallPool);
 
-    const grid3 worldSize = {5, 5, 5};
+    const grid3 worldSize = {10, 10, 5};
     core.worldData = mpGenerateWorldData(worldSize, chunkMemory);
 
     mpMemoryPool meshPool = mpCreateMemoryPool(core.worldData.chunkCount, MegaBytes(1), 42);
@@ -578,7 +577,7 @@ int main(int argc, char *argv[])
     mpPrintMemoryInfo(chunkMemory, "chunkmemory");
     mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
-    printf("Largest chunk size: %zu", largestChunkSize);
+    printf("Largest chunk size: %zu\n", largestChunkSize);
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
@@ -612,16 +611,24 @@ int main(int argc, char *argv[])
         UpdateCameraControlState(&core.eventReceiver, &core.camControls);
 
         // Physics update
-        const float playerGravityForce = player.mass * MP_GRAVITY_CONSTANT;
-        const float playerAccel = 2.0f * playerGravityForce / player.mass;
-        constexpr float playerHeight = 4.0f;
+        constexpr float playerHeight = 3.0f;
+        float playerGravityForce = player.mass * MP_GRAVITY_CONSTANT;
+        float jumpForce = 0.0f;
 
         if(mpEntityIsGrounded(&core.worldData, player.position))
-            player.velocity.z = 0;
-        else
-            player.velocity.z += playerAccel * timestep;
-
+        {
+            playerGravityForce = 0.0f;
+            player.velocity.z = 0.0f;
+            if(core.eventReceiver.keyPressedEvents & MP_KEY_SPACE)
+            {
+                player.position.z += 0.2f;
+                jumpForce = 150.0f;
+            }
+        }
+        player.zAccel = 2.0f * (playerGravityForce + 20.0f * jumpForce) / player.mass;
+        player.velocity.z += player.zAccel * timestep;
         player.position.z += player.velocity.z * timestep;
+
         // Increment camera transform
         if(core.camControls.rUp)
             core.camera.pitch += core.camera.sensitivity * timestep;

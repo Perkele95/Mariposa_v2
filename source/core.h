@@ -24,9 +24,9 @@
 #include "logger.h"
 #include "profiler.h"
 
-#define UINT64MAX 0xFFFFFFFFFFFFFFFF
-#define PI32 3.14159265359f
-#define PI32_D 6.28318530718f
+constexpr uint64_t UINT64MAX = 0xFFFFFFFFFFFFFFFF;
+constexpr float PI32 = 3.14159265359f;
+constexpr float PI32_D = 6.28318530718f;
 
 #define KiloBytes(value) (value * 1024LL)
 #define MegaBytes(value) (value * 1024LL * 1024LL)
@@ -76,6 +76,12 @@ struct mpVertex
     vec3 position;
     vec3 normal;
     vec4 colour;
+};
+
+struct mpQuadFaceArray
+{
+    vec3 data[4];
+    vec3 normal;
 };
 
 struct mpQuad
@@ -215,6 +221,6 @@ struct mpCore
 struct mpEntity
 {
     vec3 position, velocity;
-    float mass;
+    float mass, zAccel;
     uint32_t reserved;
 };
