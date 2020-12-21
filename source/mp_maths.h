@@ -328,7 +328,7 @@ struct mat4x4
     float data[4][4];
 };
 
-inline mat4x4 Mat4x4Identity()
+inline constexpr mat4x4 Mat4x4Identity()
 {
     mat4x4 result = {
         1.0f, 0.0f, 0.0f, 0.0f,
@@ -498,14 +498,16 @@ inline float _lerp(float a0, float a1, float weight)
     return a0 + (a1 - a0) * weight;
 }
 
-inline vec2 _randomGradient(float ix, float iy)
+inline vec2 _randomGradient(int32_t ix, int32_t iy)
 {
-    float random = 2920.0f * sinf(ix * 21942.0f + iy * 171324.0f + 8912.0f) * cosf(ix * 23157.0f * 217832.0f + 9758.0f);
+    float ixf = static_cast<float>(ix);
+    float iyf = static_cast<float>(iy);
+    float random = 2920.0f * sinf(ixf * 21942.0f + iyf * 171324.0f + 8912.0f) * cosf(ixf * 23157.0f * 217832.0f + 9758.0f);
     vec2 result = {cosf(random), sinf(random)};
     return result;
 }
 
-inline float _dotGridGradient(float ix, float iy, float x, float y)
+inline float _dotGridGradient(int32_t ix, int32_t iy, float x, float y)
 {
     vec2 gradient = _randomGradient(ix, iy);
     float dx = x - ix;
@@ -516,21 +518,21 @@ inline float _dotGridGradient(float ix, float iy, float x, float y)
 
 inline float perlin(float x, float y)
 {
-    int32_t x0 = (int32_t)x;
+    int32_t x0 = static_cast<int32_t>(x);
     int32_t x1 = x0 + 1;
-    int32_t y0 = (int32_t)y;
+    int32_t y0 = static_cast<int32_t>(y);
     int32_t y1 = y0 + 1;
 
     // Could also use higher order polynomial/s-curve here to determine lerp weights
-    float sx = x - (float)x0;
-    float sy = y - (float)y0;
+    float sx = x - static_cast<float>(x0);
+    float sy = y - static_cast<float>(y0);
 
-    float n0 = _dotGridGradient((float)x0, (float)y0, x, y);
-    float n1 = _dotGridGradient((float)x1, (float)y0, x, y);
+    float n0 = _dotGridGradient(x0, y0, x, y);
+    float n1 = _dotGridGradient(x1, y0, x, y);
     float ix0 = _lerp(n0, n1, sx);
 
-    n0 = _dotGridGradient((float)x0, (float)y0, x, y);
-    n1 = _dotGridGradient((float)x1, (float)y0, x, y);
+    n0 = _dotGridGradient(x0, y1, x, y);
+    n1 = _dotGridGradient(x1, y1, x, y);
     float ix1 = _lerp(n0, n1, sx);
 
     float result = _lerp(ix0, ix1, sy);

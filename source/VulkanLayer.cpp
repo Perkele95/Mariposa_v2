@@ -204,10 +204,10 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     instanceInfo.enabledExtensionCount = arraysize(extensions);
     instanceInfo.ppEnabledExtensionNames = extensions;
 
-    MP_LOG_INFO
     for(uint32_t i = 0; i < extensionsCount; i++)
-        printf("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
-    MP_LOG_RESET
+    {
+        MP_LOG_INFO("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
+    }
 
     free(extensionProperties);
 

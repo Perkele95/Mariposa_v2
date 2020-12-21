@@ -11,27 +11,15 @@
 #define LOGGER_COLOUR_YELLOW 6
 #define LOGGER_COLOUR_RED 4
 
-inline void logger_set_print_colour(WORD logColour)
-{
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hConsole, logColour);
-}
+#define MP_SET_LOG(colour) HANDLE logConsole = GetStdHandle(STD_OUTPUT_HANDLE); SetConsoleTextAttribute(logConsole, colour);
 
-inline void logger_reset_print_colour()
-{
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    SetConsoleTextAttribute(hConsole, LOGGER_COLOUR_DEFAULT);
-}
-
-#define MP_LOG_TRACE logger_set_print_colour(LOGGER_COLOUR_LIGHT_YELLOW);
-#define MP_LOG_INFO logger_set_print_colour(LOGGER_COLOUR_GREEN);
-#define MP_LOG_WARN logger_set_print_colour(LOGGER_COLOUR_YELLOW);
-#define MP_LOG_ERROR logger_set_print_colour(LOGGER_COLOUR_RED);
-#define MP_LOG_RESET logger_reset_print_colour();
+#define MP_LOG_TRACE(format, ...) MP_SET_LOG(LOGGER_COLOUR_LIGHT_YELLOW) printf(format, __VA_ARGS__); SetConsoleTextAttribute(logConsole, LOGGER_COLOUR_DEFAULT);
+#define MP_LOG_INFO(format, ...) MP_SET_LOG(LOGGER_COLOUR_GREEN) printf(format, __VA_ARGS__); SetConsoleTextAttribute(logConsole, LOGGER_COLOUR_DEFAULT);
+#define MP_LOG_WARN(format, ...) MP_SET_LOG(LOGGER_COLOUR_YELLOW) printf(format, __VA_ARGS__); SetConsoleTextAttribute(logConsole, LOGGER_COLOUR_DEFAULT);
+#define MP_LOG_ERROR(format, ...) MP_SET_LOG(LOGGER_COLOUR_RED) printf(format, __VA_ARGS__); SetConsoleTextAttribute(logConsole, LOGGER_COLOUR_DEFAULT);
 #else
-#define MP_LOG_TRACE
-#define MP_LOG_INFO
-#define MP_LOG_WARN
-#define MP_LOG_ERROR
-#define MP_LOG_RESET
+#define MP_LOG_TRACE(format, ...)
+#define MP_LOG_INFO(format, ...)
+#define MP_LOG_WARN(format, ...)
+#define MP_LOG_ERROR(format, ...)
 #endif

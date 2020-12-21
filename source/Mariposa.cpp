@@ -1,34 +1,9 @@
-#include "core.h"
+#include "Mariposa.h"
 #include "Win32_Mariposa.h"
 #include "VulkanLayer.h"
 
 #include <stdlib.h>
 #include <stdio.h>
-
-constexpr uint32_t MP_CHUNK_SIZE = 20;
-constexpr float MP_GRAVITY_CONSTANT = -9.81f;
-
-static mpVoxelChunk mpAllocateChunk(mpMemoryRegion *memory)
-{
-// TODO: This function is ugly as hell, consider redoing some of this stuff
-    constexpr size_t chunkSize2x = MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    constexpr size_t chunkSize3x = MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    mpVoxelChunk chunk = {};
-    chunk.size = MP_CHUNK_SIZE;
-    chunk.pBlocks = static_cast<mpVoxel***>(mpAllocateIntoRegion(memory, sizeof(mpVoxel**) * MP_CHUNK_SIZE));
-    *chunk.pBlocks = static_cast<mpVoxel**>(mpAllocateIntoRegion(memory, sizeof(mpVoxel*) * chunkSize2x));
-    **chunk.pBlocks = static_cast<mpVoxel*>(mpAllocateIntoRegion(memory, sizeof(mpVoxel) * chunkSize3x));
-
-    // Pointer to pointer assignment
-    for(uint32_t i = 1; i < MP_CHUNK_SIZE; i++)
-        chunk.pBlocks[i] = &chunk.pBlocks[0][0] + i * MP_CHUNK_SIZE;
-    // Pointer assignment
-    for(uint32_t i = 0; i < MP_CHUNK_SIZE; i++)
-        for(uint32_t k = 0; k < MP_CHUNK_SIZE; k++)
-            chunk.pBlocks[i][k] = (&chunk.pBlocks[0][0][0]) + i * chunkSize2x + k * MP_CHUNK_SIZE;
-
-    return chunk;
-}
 
 constexpr static mpQuadFaceArray mpQuadFaceNorth()
 {
@@ -119,7 +94,7 @@ static mpQuad mpCreateQuad(mpQuadFaceArray (*getQuadFace)(), vec3 offset, vec4 c
 
 static size_t largestChunkSize = 0;
 // mpCreateMesh resets tempMemory after use.
-static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory)
+static mpMesh mpCreateMesh(mpChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory, mpVoxelTypeDictionary *typeDict)
 {
     constexpr float VOXEL_SCALE = 0.5f;
     constexpr uint16_t vertexStride = 4;
@@ -138,11 +113,11 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++)
             {
-                uint32_t drawFlags = chunk->pBlocks[x][y][z].flags;
+                uint32_t drawFlags = chunk->voxels[x][y][z].flags;
                 if((drawFlags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
-                const vec4 colour = _mpBlockColours[chunk->pBlocks[x][y][z].type];
+                const vec4 colour = mpVoxelDictionaryGetValue(typeDict, chunk->voxels[x][y][z].type);
                 const vec3 positionOffset = {
                     static_cast<float>(x) + chunk->position.x,
                     static_cast<float>(y) + chunk->position.y,
@@ -244,20 +219,19 @@ static mpMesh mpCreateMesh(mpVoxelChunk *chunk, mpMemoryRegion *meshRegion, mpMe
 
     return mesh;
 }
-
-inline static bool32 mpVoxelIsAboveSurfaceFunc(vec3 position, float (*noise)(float x, float y))
+// TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
+static mpChunk mpGenerateChunkTerrain(mpChunk chunk)
 {
-    constexpr float surfaceLevel = 40.0f;
-    constexpr float noiseFactor = 200.0f;
-    const float height = surfaceLevel + noiseFactor * noise(position.x * noiseFactor, position.y * noiseFactor);
-    return position.z > height;
-}
-
-static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
-{
-    const float threshold = -0.5f;
+    /* 3D Noise constants
+    const float threshold = -0.2f;
     const float typeThreshold = -1.0f;
     const float noiseFactor = 10.0f;
+    */
+    constexpr float surfaceLevel = 40.0f;
+    constexpr float granularity = 0.05f;
+    constexpr float moistureFactor = 0.4f;
+    constexpr float heightMult = 7.0f;
+
     vec3 globalPos = {};
 
     for(uint32_t z = 0; z < MP_CHUNK_SIZE; z++){
@@ -267,21 +241,28 @@ static mpVoxelChunk mpGenerateChunkTerrain(mpVoxelChunk chunk)
                 globalPos.x = chunk.position.x + static_cast<float>(x);
                 globalPos.y = chunk.position.y + static_cast<float>(y);
                 globalPos.z = chunk.position.z + static_cast<float>(z);
-                if(mpVoxelIsAboveSurfaceFunc(globalPos, perlin))
-                    continue;
 
+                const float moistureThreshold = perlin(globalPos.x * moistureFactor, globalPos.y * moistureFactor);
+                const float surfaceThreshold = moistureThreshold + surfaceLevel + heightMult * perlin(globalPos.x * granularity, globalPos.y * granularity);
+
+                if(globalPos.z > surfaceThreshold)
+                    continue;
+                chunk.voxels[x][y][z].flags = VOXEL_FLAG_ACTIVE;
+                chunk.voxels[x][y][z].type = VOXEL_TYPE_GRASS;
+                /*
                 const float noiseValue = noiseFactor * perlin3Dmap(globalPos / noiseFactor);
 
                 if(noiseValue < threshold)
-                    chunk.pBlocks[x][y][z].flags = VOXEL_FLAG_ACTIVE;
-                chunk.pBlocks[x][y][z].type = noiseValue < typeThreshold ? Voxel_Type_Grass : Voxel_Type_Grass2;
+                    chunk.voxels[x][y][z].flags = VOXEL_FLAG_ACTIVE;
+                chunk.voxels[x][y][z].type = noiseValue < typeThreshold ? VOXEL_TYPE_GRASS : VOXEL_TYPE_DIRT;
+                */
             }
         }
     }
     return chunk;
 }
 // Loops through all blocks in a chunk and decides which faces need to be drawn based on neighbours active status
-static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
+static mpChunk mpSetDrawFlags(mpChunk chunk)
 {
     constexpr uint32_t max = MP_CHUNK_SIZE - 1;
     bool32 localCheck = 0;
@@ -291,53 +272,53 @@ static mpVoxelChunk mpSetDrawFlags(mpVoxelChunk chunk)
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++)
             {
-                voxelFlags = chunk.pBlocks[x][y][z].flags;
+                voxelFlags = chunk.voxels[x][y][z].flags;
                 if((voxelFlags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
                 if(x > 0)
-                    localCheck = chunk.pBlocks[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x - 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_SOUTH)
-                    localCheck = chunk.southNeighbour->pBlocks[max][y][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.southNeighbour->voxels[max][y][z].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_SOUTH;
 
                 if(x < max)
-                    localCheck = chunk.pBlocks[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x + 1][y][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_NORTH)
-                    localCheck = chunk.northNeighbour->pBlocks[0][y][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.northNeighbour->voxels[0][y][z].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_NORTH;
 
                 if(y > 0)
-                    localCheck = chunk.pBlocks[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x][y - 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_WEST)
-                    localCheck = chunk.westNeighbour->pBlocks[x][max][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.westNeighbour->voxels[x][max][z].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_WEST;
 
                 if(y < max)
-                    localCheck = chunk.pBlocks[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x][y + 1][z].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_EAST)
-                    localCheck = chunk.eastNeighbour->pBlocks[x][0][z].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.eastNeighbour->voxels[x][0][z].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_EAST;
 
                 if(z > 0)
-                    localCheck = chunk.pBlocks[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x][y][z - 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_BOTTOM)
-                    localCheck = chunk.bottomNeighbour->pBlocks[x][y][max].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.bottomNeighbour->voxels[x][y][max].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_BOTTOM;
 
                 if(z < max)
-                    localCheck = chunk.pBlocks[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.voxels[x][y][z + 1].flags & VOXEL_FLAG_ACTIVE;
                 else if(chunk.flags & CHUNK_FLAG_NEIGHBOUR_TOP)
-                    localCheck = chunk.topNeighbour->pBlocks[x][y][0].flags & VOXEL_FLAG_ACTIVE;
+                    localCheck = chunk.topNeighbour->voxels[x][y][0].flags & VOXEL_FLAG_ACTIVE;
                 if(localCheck == false)
                     voxelFlags |= VOXEL_FLAG_DRAW_TOP;
 
-                chunk.pBlocks[x][y][z].flags = voxelFlags;
+                chunk.voxels[x][y][z].flags = voxelFlags;
             }
         }
     }
@@ -349,13 +330,12 @@ static mpWorldData mpGenerateWorldData(const grid3 worldSize, mpMemoryRegion *ch
 {
     mpWorldData worldData = {};
     worldData.chunkCount = worldSize.x * worldSize.y * worldSize.z;
-    worldData.chunks = static_cast<mpVoxelChunk*>(mpAllocateIntoRegion(chunkMemory, sizeof(mpVoxelChunk) * worldData.chunkCount));
+    worldData.chunks = static_cast<mpChunk*>(mpAllocateIntoRegion(chunkMemory, sizeof(mpChunk) * worldData.chunkCount));
 
     vec3 pos = {};
 
     for(uint32_t i = 0; i < worldData.chunkCount; i++)
     {
-        worldData.chunks[i] = mpAllocateChunk(chunkMemory);
         worldData.chunks[i].position = pos * MP_CHUNK_SIZE;
         worldData.chunks[i] = mpGenerateChunkTerrain(worldData.chunks[i]);
 
@@ -408,7 +388,7 @@ static mpWorldData mpGenerateWorldData(const grid3 worldSize, mpMemoryRegion *ch
     return worldData;
 }
 
-static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryPool *meshPool, mpMemoryRegion *meshHeaderMemory, mpMemoryRegion *tempMemory)
+static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryPool *meshPool, mpMemoryRegion *meshHeaderMemory, mpMemoryRegion *tempMemory, mpVoxelTypeDictionary *typeDict)
 {
     mpRenderData renderData = {};
 
@@ -418,66 +398,55 @@ static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryP
     for(uint32_t i = 0; i < renderData.meshCount; i++)
     {
         mpMemoryRegion *meshRegion = mpGetMemoryRegion(meshPool);
-        renderData.meshes[i] = mpCreateMesh(&worldData->chunks[i], meshRegion, tempMemory);
+        renderData.meshes[i] = mpCreateMesh(&worldData->chunks[i], meshRegion, tempMemory, typeDict);
     }
     return renderData;
 }
 
-inline static void ProcessKeyToCameraControl(const mpEventReceiver *receiver, mpKeyEvent key, bool32 *controlValue)
+static void mpUpdateCameraControlState(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
 {
-    if(receiver->keyPressedEvents & key)
-        *controlValue = true;
-    else if(receiver->keyReleasedEvents & key)
-        *controlValue = false;
-}
+    constexpr mpKeyEvent keyList[] = {
+        MP_KEY_UP, MP_KEY_DOWN,
+        MP_KEY_LEFT, MP_KEY_RIGHT,
+        MP_KEY_W, MP_KEY_S,
+        MP_KEY_A, MP_KEY_D,
+    };
+    bool32 *controlList[] = {
+        &cameraControls->rUp, &cameraControls->rDown,
+        &cameraControls->rLeft, &cameraControls->rRight,
+        &cameraControls->tForward, &cameraControls->tBackward,
+        &cameraControls->tLeft, &cameraControls->tRight,
+    };
+    constexpr uint32_t listSize = arraysize(keyList);
 
-static void UpdateCameraControlState(const mpEventReceiver *eventReceiver, mpCameraControls *cameraControls)
-{
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_UP, &cameraControls->rUp);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_DOWN, &cameraControls->rDown);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_LEFT, &cameraControls->rLeft);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_RIGHT, &cameraControls->rRight);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_W, &cameraControls->tForward);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_S, &cameraControls->tBackward);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_A, &cameraControls->tLeft);
-    ProcessKeyToCameraControl(eventReceiver, MP_KEY_D, &cameraControls->tRight);
-}
-
-inline static void UpdateFpsSampler(mpFPSsampler *sampler, float timestep)
-{
-    if(sampler->count < sampler->level)
+    for(uint32_t i = 0; i < listSize; i++)
     {
-        sampler->value += timestep;
-        sampler->count++;
-    }
-    else
-    {
-        float sampledFps = static_cast<float>(sampler->level) / sampler->value;
-        //printf("Sampled fps: %f\n", sampledFps);
-        sampler->count = 0;
-        sampler->value = 0;
+        if(eventReceiver->keyPressedEvents & keyList[i])
+            *controlList[i] = true;
+        else if(eventReceiver->keyReleasedEvents & keyList[i])
+            *controlList[i] = false;
     }
 }
-// Returns the chunk that contains position
-inline static mpVoxelChunk* mpChunkBoundsCheck(const mpWorldData *worldData, vec3 position)
+// Returns the chunk that contains position -- 39, 34, 40
+inline static mpChunk* mpChunkBoundsCheck(const mpWorldData *worldData, vec3 position)
 {
-    constexpr vec3 diagonal = {MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1, MP_CHUNK_SIZE - 1};
-    mpVoxelChunk *result = nullptr;
+    constexpr vec3 diagonal = {MP_CHUNK_SIZE, MP_CHUNK_SIZE, MP_CHUNK_SIZE};
+    mpChunk *result = nullptr;
     for(uint32_t i = 0; i < worldData->chunkCount; i++)
     {
         const vec3 chunkCorner = worldData->chunks[i].position + diagonal;
         // Simple bounding box search to find which chunk the destination is located within
-        if(position.x < worldData->chunks[i].position.x)
+        if(position.x <= worldData->chunks[i].position.x)
             continue;
         if(position.x > chunkCorner.x)
             continue;
 
-        if(position.y < worldData->chunks[i].position.y)
+        if(position.y <= worldData->chunks[i].position.y)
             continue;
         if(position.y > chunkCorner.y)
             continue;
 
-        if(position.z < worldData->chunks[i].position.z)
+        if(position.z <= worldData->chunks[i].position.z)
             continue;
         if(position.z > chunkCorner.z)
             continue;
@@ -497,7 +466,7 @@ static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 
     {
         vec3 raycastHit = origin + direction * static_cast<float>(step);
 
-        mpVoxelChunk *chunk = mpChunkBoundsCheck(worldData, raycastHit);
+        mpChunk *chunk = mpChunkBoundsCheck(worldData, raycastHit);
         if(chunk != nullptr)
         {
             // Convert raycastHit to local chunk space
@@ -507,7 +476,7 @@ static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 
             const uint32_t z = static_cast<uint32_t>(raycastHit.z);
 
             previous = result;
-            result = &chunk->pBlocks[x][y][z];
+            result = &chunk->voxels[x][y][z];
             chunk->flags |= CHUNK_FLAG_IS_DIRTY;
             if(result->flags & VOXEL_FLAG_ACTIVE)
             {
@@ -522,22 +491,24 @@ static mpVoxel* mpRaycast(mpWorldData *worldData, const vec3 origin, const vec3 
 static bool32 mpEntityIsGrounded(const mpWorldData *worldData, vec3 position)
 {
     bool32 result = false;
-    mpVoxelChunk *chunk = mpChunkBoundsCheck(worldData, position);
+    mpChunk *chunk = mpChunkBoundsCheck(worldData, position);
     if(chunk != nullptr)
     {
         position -= chunk->position;
 
-        position.x = position.x >= 0 ? position.x : 0;
-        position.y = position.y >= 0 ? position.y : 0;
-        position.z = position.z >= 0 ? position.z : 0;
+        if(position.x < 0.0f)
+            position.x = 0.0f;
+        if(position.y < 0.0f)
+            position.y = 0.0f;
+        if(position.z < 0.0f)
+            position.z = 0.0f;
         const uint32_t x = static_cast<uint32_t>(position.x);
         const uint32_t y = static_cast<uint32_t>(position.y);
         const uint32_t z = static_cast<uint32_t>(position.z);
-        result = chunk->pBlocks[x][y][z].flags & VOXEL_FLAG_ACTIVE;
+        result = chunk->voxels[x][y][z].flags & VOXEL_FLAG_ACTIVE;
     }
     else
     {
-        MP_LOG_ERROR
         puts("GROUND CHECK ERROR: Entity out of world bounds");
     }
     return result;
@@ -545,7 +516,7 @@ static bool32 mpEntityIsGrounded(const mpWorldData *worldData, vec3 position)
 
 inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
 {
-    printf("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000);
+    MP_LOG_TRACE("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000)
 }
 
 int main(int argc, char *argv[])
@@ -564,16 +535,22 @@ int main(int argc, char *argv[])
     mpMemoryRegion *meshHeaderMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&smallPool);
 
+    mpVoxelTypeDictionary typeDict = mpCreateVoxelTypeDictionary();
+    typeDict.data[VOXEL_TYPE_GRASS] = {0.0f, 0.3f, 0.05f, 1.0f};
+    typeDict.data[VOXEL_TYPE_DARKGRASS] = {0.0f, 0.2f, 0.0f, 1.0f};
+    typeDict.data[VOXEL_TYPE_DIRT] = {0.3f, 0.2f, 0.0f, 1.0f};
+    typeDict.data[VOXEL_TYPE_STONE] = {0.15f, 0.2f, 0.2f, 1.0f};
+    typeDict.data[VOXEL_TYPE_WOOD] = {0.6f, 0.2f, 0.2f, 1.0f};
+
     const grid3 worldSize = {10, 10, 5};
     core.worldData = mpGenerateWorldData(worldSize, chunkMemory);
 
     mpMemoryPool meshPool = mpCreateMemoryPool(core.worldData.chunkCount, MegaBytes(1), 42);
-    core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, meshHeaderMemory, tempMemory);
+    core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, meshHeaderMemory, tempMemory, &typeDict);
 
     mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory);
 
-    MP_LOG_TRACE
     mpPrintMemoryInfo(chunkMemory, "chunkmemory");
     mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
@@ -586,17 +563,16 @@ int main(int argc, char *argv[])
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
     core.globalLight.ambient = 0.4f;
-    core.globalLight.position = {15.0f, 15.0f, 100.0f};
-    core.globalLight.colour = {1.0f, 1.0f, 1.0f};
+    core.globalLight.position = {100.0f, 100.0f, 100.0f};
+    core.globalLight.colour = {0.9f, 0.9f, 1.0f};
 
     // TODO: Entity Component System?
     mpEntity player = {};
     player.position = {20.0f, 20.0f, 52.0f};
     player.velocity = {};
     player.mass = 1.0f;
+    player.speed = 10.0f;
     core.camera.position = player.position;
-
-    core.fpsSampler.level = 1000;
 
     float timestep = 0.0f;
     int64_t lastCounter = 0, perfCountFrequency = 0;
@@ -608,9 +584,9 @@ int main(int argc, char *argv[])
     {
         PlatformPollEvents(&core.eventReceiver);
 
-        UpdateCameraControlState(&core.eventReceiver, &core.camControls);
+        mpUpdateCameraControlState(&core.eventReceiver, &core.camControls);
 
-        // Physics update
+        // Player physics update
         constexpr float playerHeight = 3.0f;
         float playerGravityForce = player.mass * MP_GRAVITY_CONSTANT;
         float jumpForce = 0.0f;
@@ -622,14 +598,19 @@ int main(int argc, char *argv[])
             if(core.eventReceiver.keyPressedEvents & MP_KEY_SPACE)
             {
                 player.position.z += 0.2f;
-                jumpForce = 150.0f;
+                jumpForce = 200.0f;
             }
         }
-        player.zAccel = 2.0f * (playerGravityForce + 20.0f * jumpForce) / player.mass;
+        player.zAccel = 2.0f * (playerGravityForce + 10.0f * jumpForce) / player.mass;
         player.velocity.z += player.zAccel * timestep;
         player.position.z += player.velocity.z * timestep;
 
-        // Increment camera transform
+        // Clamp rotation values
+        if(core.camera.pitch > core.camera.pitchClamp)
+            core.camera.pitch = core.camera.pitchClamp;
+        else if(core.camera.pitch < -core.camera.pitchClamp)
+            core.camera.pitch = -core.camera.pitchClamp;
+        // Update camera rotation values
         if(core.camControls.rUp)
             core.camera.pitch += core.camera.sensitivity * timestep;
         else if(core.camControls.rDown)
@@ -638,20 +619,15 @@ int main(int argc, char *argv[])
             core.camera.yaw += core.camera.sensitivity * timestep;
         else if(core.camControls.rRight)
             core.camera.yaw -= core.camera.sensitivity * timestep;
-
-        if(core.camera.pitch > core.camera.pitchClamp)
-            core.camera.pitch = core.camera.pitchClamp;
-        else if(core.camera.pitch < -core.camera.pitchClamp)
-            core.camera.pitch = -core.camera.pitchClamp;
-
-        // Update view & projection matrices
+        // Get camera vectors
         const float yawCos = cosf(core.camera.yaw);
         const float yawSin = sinf(core.camera.yaw);
         const float pitchCos = cosf(core.camera.pitch);
         const vec3 front = {pitchCos * yawCos, pitchCos * yawSin, sinf(core.camera.pitch)};
         const vec3 xyFront = {yawCos, yawSin, 0.0f};
         const vec3 left = {yawSin, -yawCos, 0.0f};
-        const vec3 up = {0.0f, 0.0f, 1.0f};
+        constexpr vec3 up = {0.0f, 0.0f, 1.0f};
+        // Update player position state
         if(core.camControls.tForward)
             player.position += xyFront * core.camera.speed * timestep;
         else if(core.camControls.tBackward)
@@ -660,11 +636,12 @@ int main(int argc, char *argv[])
             player.position -= left * core.camera.speed * timestep;
         else if(core.camControls.tRight)
             player.position += left * core.camera.speed * timestep;
-
+        // Update camera matrices
         core.camera.position = {player.position.x, player.position.y, player.position.z + playerHeight};
         core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
+        // Game events : raycasthits
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
         {
             mpVoxel *raycastHit = mpRaycast(&core.worldData, core.camera.position, front);
@@ -678,7 +655,7 @@ int main(int argc, char *argv[])
             {
                 // TODO: need a drawFlags function that sets flags for a single voxel instead of redoing the whole chunk
                 core.worldData.chunks[i] = mpSetDrawFlags(core.worldData.chunks[i]);
-                core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory);
+                core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory, &typeDict);
                 core.worldData.chunks[i].flags ^= CHUNK_FLAG_IS_DIRTY;
                 mpVulkanRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
                 core.renderFlags |= MP_RENDER_FLAG_REDRAW_MESHES;
@@ -690,7 +667,6 @@ int main(int argc, char *argv[])
         core.windowInfo.hasResized = false;
         ResetEventReceiver(&core.eventReceiver);
         timestep = PlatformUpdateClock(&lastCounter, perfCountFrequency);
-        UpdateFpsSampler(&core.fpsSampler, timestep);
         mpDbgProcessSampledRecords(2000);
     }
 

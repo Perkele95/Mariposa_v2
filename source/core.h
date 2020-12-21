@@ -35,6 +35,9 @@ constexpr float PI32_D = 6.28318530718f;
 
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
 
+constexpr uint32_t MP_CHUNK_SIZE = 20;
+constexpr float MP_GRAVITY_CONSTANT = -9.81f;
+
 typedef int32_t bool32;
 typedef void* mpHandle;
 
@@ -62,13 +65,6 @@ struct mpCallbacks
 struct mpThreadContext
 {
     int32_t placeholder;
-};
-
-struct mpFPSsampler
-{
-    uint32_t level;
-    uint32_t count;
-    float value;
 };
 
 struct mpVertex
@@ -104,36 +100,26 @@ struct mpRenderData
     mpMesh *meshes;
     uint32_t meshCount;
 };
-// TODO: Capitalise these
-enum mpVoxelType
-{
-    Voxel_Type_Empty,
-    Voxel_Type_Grass,
-    Voxel_Type_Dirt,
-    Voxel_Type_Stone,
-    Voxel_Type_Water,
-    Voxel_Type_Grass2,
-    Voxel_Type_MAX,
-};
-// TODO: Create associative array for colours perhaps
-static const vec4 _mpBlockColours[Voxel_Type_MAX] = {
-    {0.0f, 0.0f, 0.0f, 1.0f},
-    {0.0f, 0.5f, 0.2f, 1.0f},
-    {0.4f, 0.3f, 0.1f, 1.0f},
-    {0.2f, 0.2f, 0.2f, 1.0f},
-    {0.3f, 0.7f, 1.0f, 0.5f},
-    {0.0f, 0.25f, 0.15f, 1.0f},
-};
 
 enum mpVoxelFlags
 {
-    VOXEL_FLAG_ACTIVE      = 0x0001,
-    VOXEL_FLAG_DRAW_TOP    = 0x0002,
-    VOXEL_FLAG_DRAW_BOTTOM = 0x0004,
-    VOXEL_FLAG_DRAW_NORTH  = 0x0008,
-    VOXEL_FLAG_DRAW_SOUTH  = 0x0010,
-    VOXEL_FLAG_DRAW_EAST   = 0x0020,
-    VOXEL_FLAG_DRAW_WEST   = 0x0040,
+    VOXEL_FLAG_ACTIVE      = 0x00000001,
+    VOXEL_FLAG_DRAW_TOP    = 0x00000002,
+    VOXEL_FLAG_DRAW_BOTTOM = 0x00000004,
+    VOXEL_FLAG_DRAW_NORTH  = 0x00000008,
+    VOXEL_FLAG_DRAW_SOUTH  = 0x00000010,
+    VOXEL_FLAG_DRAW_EAST   = 0x00000020,
+    VOXEL_FLAG_DRAW_WEST   = 0x00000040,
+};
+// TODO: Capitalise these
+enum mpVoxelType
+{
+    VOXEL_TYPE_GRASS,
+    VOXEL_TYPE_DARKGRASS,
+    VOXEL_TYPE_DIRT,
+    VOXEL_TYPE_STONE,
+    VOXEL_TYPE_WOOD,
+    VOXEL_TYPE_MAX,
 };
 
 struct mpVoxel
@@ -154,24 +140,23 @@ enum mpChunkFlags
     CHUNK_FLAG_IS_DIRTY         = 0x0080,
 };
 
-struct mpVoxelChunk
+struct mpChunk
 {
-    mpVoxel ***pBlocks;
-    uint32_t size;
+    mpVoxel voxels[MP_CHUNK_SIZE][MP_CHUNK_SIZE][MP_CHUNK_SIZE];
     vec3 position;
 
     uint32_t flags;
-    mpVoxelChunk *northNeighbour;
-    mpVoxelChunk *southNeighbour;
-    mpVoxelChunk *topNeighbour;
-    mpVoxelChunk *bottomNeighbour;
-    mpVoxelChunk *eastNeighbour;
-    mpVoxelChunk *westNeighbour;
+    mpChunk *northNeighbour;
+    mpChunk *southNeighbour;
+    mpChunk *topNeighbour;
+    mpChunk *bottomNeighbour;
+    mpChunk *eastNeighbour;
+    mpChunk *westNeighbour;
 };
 
 struct mpWorldData
 {
-    mpVoxelChunk *chunks;
+    mpChunk *chunks;
     uint32_t chunkCount;
 };
 
@@ -206,7 +191,6 @@ struct mpCore
     uint32_t renderFlags;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
-    mpFPSsampler fpsSampler;
     mpEventReceiver eventReceiver;
 
     mpCamera camera;
@@ -221,6 +205,6 @@ struct mpCore
 struct mpEntity
 {
     vec3 position, velocity;
-    float mass, zAccel;
+    float mass, zAccel, speed;
     uint32_t reserved;
 };

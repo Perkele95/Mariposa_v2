@@ -51,9 +51,7 @@ inline mpMemoryRegion* mpGetMemoryRegion(mpMemoryPool *pool)
     mpMemoryRegion *region = pool->head;
     if(region == nullptr)
     {
-        MP_LOG_ERROR
-        puts("MEMORY ERROR: mpGetMemoryRegion failed: pool out of free regions");
-        MP_LOG_RESET
+        MP_LOG_ERROR("MEMORY ERROR: mpGetMemoryRegion failed: pool(%d) out of free regions", pool->ID)
         return nullptr;
     }
     pool->head = pool->head->next;
@@ -68,9 +66,7 @@ inline void* mpAllocateIntoRegion(mpMemoryRegion *region, size_t allocationSize)
     region->dataSize += allocationSize;
     if(region->dataSize > region->regionSize)
     {
-        MP_LOG_ERROR
-        printf("MEMORY ERROR: mpAllocateIntoRegion failed: region(pool: %d) is out of memory\n", region->poolID);
-        MP_LOG_RESET
+        MP_LOG_ERROR("MEMORY ERROR: mpAllocateIntoRegion failed: region(pool: %d) is out of memory\n", region->poolID)
         return nullptr;
     }
 
@@ -88,16 +84,12 @@ inline void mpFreeMemoryRegion(mpMemoryPool *pool, mpMemoryRegion *region)
 {
     if(region == nullptr)
     {
-        MP_LOG_ERROR
         puts("MEMORY ERROR: mpFreeMemoryRegion failed: region is null");
-        MP_LOG_RESET
         return;
     }
     if(pool->ID != region->poolID)
     {
-        MP_LOG_ERROR
-        printf("MEMORY ERROR: mpFreeMemoryRegion failed: given region does not belong to pool %d\n", pool->ID);
-        MP_LOG_RESET
+        MP_LOG_ERROR("MEMORY ERROR: mpFreeMemoryRegion failed: given region does not belong to pool %d\n", pool->ID)
         return;
     }
     region->data -= region->dataSize;
