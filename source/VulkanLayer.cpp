@@ -1097,6 +1097,9 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *render
 // Recreates geometry buffers and signals vulkanupdate to recreate swapchain
 void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index)
 {
+    if(mesh->vertexCount <= 0)
+        return;
+
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(rendererHandle);
 
     vkDeviceWaitIdle(renderer->device);

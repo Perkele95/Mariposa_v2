@@ -539,13 +539,10 @@ inline float perlin(float x, float y)
     return result;
 }
 
-inline float perlin3Dmap(vec3 position)
+inline float mapNoise(vec3 position)
 {
-    float first = perlin(position.x, position.y);
-    float second = perlin(position.x, position.z);
-    float third = perlin(position.y, position.z);
-
-    float result = (first + second + third) / 3.0f;
+    float map = perlin(position.x, position.y);
+    float result = perlin(map, position.z);
 
     return result;
 }

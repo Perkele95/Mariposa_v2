@@ -40,6 +40,8 @@ constexpr float MP_GRAVITY_CONSTANT = -9.81f;
 
 typedef int32_t bool32;
 typedef void* mpHandle;
+typedef uint32_t mpBitField;
+typedef uint16_t mpBitFieldShort;
 
 struct mpWindowData
 {
@@ -111,21 +113,12 @@ enum mpVoxelFlags
     VOXEL_FLAG_DRAW_EAST   = 0x00000020,
     VOXEL_FLAG_DRAW_WEST   = 0x00000040,
 };
-// TODO: Capitalise these
-enum mpVoxelType
-{
-    VOXEL_TYPE_GRASS,
-    VOXEL_TYPE_DARKGRASS,
-    VOXEL_TYPE_DIRT,
-    VOXEL_TYPE_STONE,
-    VOXEL_TYPE_WOOD,
-    VOXEL_TYPE_MAX,
-};
 
 struct mpVoxel
 {
-    mpVoxelType type;
-    uint32_t flags;
+    mpBitFieldShort type;
+    mpBitFieldShort modifier;
+    mpBitField flags;
 };
 
 enum mpChunkFlags
@@ -145,7 +138,7 @@ struct mpChunk
     mpVoxel voxels[MP_CHUNK_SIZE][MP_CHUNK_SIZE][MP_CHUNK_SIZE];
     vec3 position;
 
-    uint32_t flags;
+    mpBitField flags;
     mpChunk *northNeighbour;
     mpChunk *southNeighbour;
     mpChunk *topNeighbour;
@@ -166,10 +159,10 @@ struct mpCamera
     vec3 position;
     float pitch, yaw, pitchClamp, fov, speed, sensitivity;
 };
-// R = rotation, T = translation
+
 struct mpCameraControls
 {
-    bool32 rUp, rDown, rLeft, rRight, tForward, tBackward, tLeft, tRight;
+    mpBitField flags;
 };
 
 enum mpRenderFlags
@@ -188,7 +181,7 @@ struct mpCore
 {
     const char *name;
     mpHandle rendererHandle;
-    uint32_t renderFlags;
+    mpBitField renderFlags;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
     mpEventReceiver eventReceiver;
@@ -202,9 +195,17 @@ struct mpCore
     mpGlobalLight globalLight;
 };
 
+enum mpPhysState
+{
+    MP_PHYS_STATE_GROUNDED,
+    MP_PHYS_STATE_JUMPING,
+    MP_PHYS_STATE_AIRBORNE,
+    MP_PHYS_STATE_LANDING,
+};
+
 struct mpEntity
 {
     vec3 position, velocity;
     float mass, zAccel, speed;
-    uint32_t reserved;
+    uint32_t physState;
 };
