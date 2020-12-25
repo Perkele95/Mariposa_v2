@@ -2,6 +2,50 @@
 
 #include "core.h"
 
+// Helpers
+
+inline grid32 mpVec3ToGrid32(vec3 a)
+{
+    grid32 result = {
+        static_cast<int32_t>(a.x),
+        static_cast<int32_t>(a.y),
+        static_cast<int32_t>(a.z)
+    };
+    return result;
+}
+inline vec3 mpGrid32ToVec3(grid32 a)
+{
+    vec3 result = {
+        static_cast<float>(a.x),
+        static_cast<float>(a.y),
+        static_cast<float>(a.z)
+    };
+    return result;
+}
+inline gridU32 mpVec3ToGridU32(vec3 a)
+{
+    gridU32 result = {
+        static_cast<uint32_t>(a.x),
+        static_cast<uint32_t>(a.y),
+        static_cast<uint32_t>(a.z)
+    };
+    return result;
+}
+
+static mpChunk* mpGetContainingChunk(const mpWorldData &worldData, vec3 position)
+{
+    const grid32 gIndex = mpVec3ToGrid32(position);
+    const uint32_t chunkIndexX = gIndex.x / MP_CHUNK_SIZE;
+    const uint32_t chunkIndexY = gIndex.y / MP_CHUNK_SIZE;
+    const uint32_t chunkIndexZ = gIndex.z / MP_CHUNK_SIZE;
+
+    if(chunkIndexX > worldData.bounds.x || chunkIndexY > worldData.bounds.y || chunkIndexZ > worldData.bounds.z)
+        return nullptr;
+    const uint32_t index = chunkIndexX + worldData.bounds.x * (chunkIndexY + chunkIndexZ * worldData.bounds.y);
+    return &worldData.chunks[index];
+}
+
+// Colour Array
 enum mpVoxelType
 {
     VOXEL_TYPE_GRASS,

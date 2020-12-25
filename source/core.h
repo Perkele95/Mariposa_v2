@@ -36,7 +36,8 @@ constexpr float PI32_D = 6.28318530718f;
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
 
 constexpr uint32_t MP_CHUNK_SIZE = 20;
-constexpr float MP_GRAVITY_CONSTANT = -9.81f;
+constexpr float MP_GRAVITY_CONSTANT = 9.81f;
+constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT};
 
 typedef int32_t bool32;
 typedef void* mpHandle;
@@ -151,6 +152,7 @@ struct mpWorldData
 {
     mpChunk *chunks;
     uint32_t chunkCount;
+    gridU32 bounds;
 };
 
 struct mpCamera
@@ -168,6 +170,7 @@ struct mpCameraControls
 enum mpRenderFlags
 {
     MP_RENDER_FLAG_REDRAW_MESHES = 0x0001,
+    MP_RENDER_FLAG_DRAW_DEBUG   = 0x0002,
 };
 
 struct mpGlobalLight
@@ -195,17 +198,9 @@ struct mpCore
     mpGlobalLight globalLight;
 };
 
-enum mpPhysState
-{
-    MP_PHYS_STATE_GROUNDED,
-    MP_PHYS_STATE_JUMPING,
-    MP_PHYS_STATE_AIRBORNE,
-    MP_PHYS_STATE_LANDING,
-};
-
 struct mpEntity
 {
-    vec3 position, velocity;
-    float mass, zAccel, speed;
+    vec3 position, velocity, force;
+    float mass, speed;
     uint32_t physState;
 };

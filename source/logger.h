@@ -7,9 +7,9 @@
 
 #define LOGGER_COLOUR_DEFAULT 7
 #define LOGGER_COLOUR_LIGHT_YELLOW 14
-#define LOGGER_COLOUR_GREEN 10
+#define LOGGER_COLOUR_GREEN 11
 #define LOGGER_COLOUR_YELLOW 6
-#define LOGGER_COLOUR_RED 4
+#define LOGGER_COLOUR_RED 12
 
 #define __MP_SET_LOG(colour, cstring) HANDLE logConsole##cstring = GetStdHandle(STD_OUTPUT_HANDLE); SetConsoleTextAttribute(logConsole##cstring, colour);
 #define __MP_RESET_LOG(cstring) SetConsoleTextAttribute(logConsole##cstring, LOGGER_COLOUR_DEFAULT);

@@ -549,7 +549,12 @@ inline float mapNoise(vec3 position)
 
 // ------
 // Map/grid related stuff
-struct grid3
+struct grid32
 {
     int32_t x,y,z;
+};
+
+struct gridU32
+{
+    uint32_t x, y, z;
 };

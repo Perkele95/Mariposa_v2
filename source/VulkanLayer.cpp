@@ -1,10 +1,10 @@
 #include "VulkanLayer.h"
 #include "C:\Users\arlev\Documents\GitHub\Mariposa_v2\1.2.162.0\Include\vulkan\vulkan.h"
 #include <stdio.h>
-// TODO: static global variables
-const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
-const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+constexpr char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+constexpr char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+// TODO: replace malloc with vulkan memory alloc
 static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checkedPhysDevice)
 {
     QueueFamilyIndices indices = {};
@@ -17,21 +17,19 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
     {
         if(queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
-            indices.graphicsFamily = i;
-            if(!indices.hasGraphicsFamily)
-                indices.hasGraphicsFamily = true;
+            indices.graphicsFamily.value = i;
+            indices.graphicsFamily.hasValue = true;
         }
 
         VkBool32 presentSupport = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(*checkedPhysDevice, i, renderer->surface, &presentSupport);
         if(presentSupport)
         {
-            indices.presentFamily = i;
-            if(!indices.hasPresentFamily)
-                indices.hasPresentFamily = true;
+            indices.presentFamily.value = i;
+            indices.presentFamily.hasValue = true;
         }
 
-        if(indices.hasGraphicsFamily && indices.hasPresentFamily)
+        if(indices.graphicsFamily.hasValue && indices.presentFamily.hasValue)
         {
             indices.isComplete = true;
             break;
@@ -101,7 +99,7 @@ static void PrepareGpu(mpVkRenderer *renderer)
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, nullptr);
     if(deviceCount == 0)
-        printf("Failed to find GPUs with Vulkan Support");
+        puts("Failed to find GPUs with Vulkan Support");
 
     VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(malloc(sizeof(VkPhysicalDevice) * deviceCount));
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, devices);
@@ -119,7 +117,7 @@ static void PrepareGpu(mpVkRenderer *renderer)
     renderer->depthFormat = FindSupportedDepthFormat(renderer->gpu);
 
     if(renderer->gpu == VK_NULL_HANDLE)
-        printf("Failed to find a suitable GPU!");
+        puts("Failed to find a suitable GPU!");
 }
 
 static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
@@ -128,27 +126,25 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     uint32_t uniqueQueueFamilies[2] = {};
     uint32_t queueCount = 0;
 
-    if(renderer->indices.graphicsFamily == renderer->indices.presentFamily)
+    if(renderer->indices.graphicsFamily.value == renderer->indices.presentFamily.value)
     {
-        uniqueQueueFamilies[0] = renderer->indices.graphicsFamily;
+        uniqueQueueFamilies[0] = renderer->indices.graphicsFamily.value;
         queueCount = 1;
     }
     else
     {
-        uniqueQueueFamilies[0] = renderer->indices.graphicsFamily;
-        uniqueQueueFamilies[1] = renderer->indices.presentFamily;
+        uniqueQueueFamilies[0] = renderer->indices.graphicsFamily.value;
+        uniqueQueueFamilies[1] = renderer->indices.presentFamily.value;
         queueCount = 2;
     }
 
     float queuePriority = 1.0f;
     for(uint32_t i = 0; i < queueCount; i++)
     {
-        VkDeviceQueueCreateInfo queueCreateInfo = {};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = uniqueQueueFamilies[i];
-        queueCreateInfo.queueCount = queueCount;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
-        queueCreateInfos[i] = queueCreateInfo;
+        queueCreateInfos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfos[i].queueFamilyIndex = uniqueQueueFamilies[i];
+        queueCreateInfos[i].queueCount = queueCount;
+        queueCreateInfos[i].pQueuePriorities = &queuePriority;
     }
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
@@ -170,8 +166,8 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     VkResult error = vkCreateDevice(renderer->gpu, &createInfo, nullptr, &renderer->device);
     mp_assert(!error);
 
-    vkGetDeviceQueue(renderer->device, renderer->indices.graphicsFamily, 0, &renderer->graphicsQueue);
-    vkGetDeviceQueue(renderer->device, renderer->indices.presentFamily, 0, &renderer->presentQueue);
+    vkGetDeviceQueue(renderer->device, renderer->indices.graphicsFamily.value, 0, &renderer->graphicsQueue);
+    vkGetDeviceQueue(renderer->device, renderer->indices.presentFamily.value, 0, &renderer->presentQueue);
 }
 
 static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, const mpCallbacks *const callbacks)
@@ -179,7 +175,7 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Mariposa";
-    appInfo.pEngineName = "Mariposa";
+    appInfo.pEngineName = appInfo.pApplicationName;
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
@@ -238,7 +234,7 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     // Prepare command pool
     VkCommandPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = renderer->indices.graphicsFamily;
+    poolInfo.queueFamilyIndex = renderer->indices.graphicsFamily.value;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     error = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->commandPool);
@@ -250,9 +246,9 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
 static uint32_t Uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
 {
     if(value < min)
-        return min;
+        value = min;
     else if(value > max)
-        return max;
+        value = max;
 
     return value;
 }
@@ -264,10 +260,10 @@ static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat form
     createInfo.image = image;
     createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     createInfo.format = format;
-    createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components = {
+        VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+        VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY
+    };
     createInfo.subresourceRange.aspectMask = aspectFlags;
     createInfo.subresourceRange.baseMipLevel = 0;
     createInfo.subresourceRange.levelCount = 1;
@@ -284,10 +280,8 @@ static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat form
 VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR *availableFormats, uint32_t formatCount)
 {
     for(uint32_t i = 0; i < formatCount; i++)
-    {
         if(availableFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB && availableFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             return availableFormats[i];
-    }
 
     return availableFormats[0];
 }
@@ -363,9 +357,9 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion *vulkanReg
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily, renderer->indices.presentFamily };
+    uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily.value, renderer->indices.presentFamily.value };
 
-    if(renderer->indices.graphicsFamily != renderer->indices.presentFamily)
+    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value)
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
@@ -432,9 +426,9 @@ static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t he
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily, renderer->indices.presentFamily };
+    uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily.value, renderer->indices.presentFamily.value };
 
-    if(renderer->indices.graphicsFamily != renderer->indices.presentFamily)
+    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value)
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
@@ -455,7 +449,7 @@ static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t he
 
     VkResult error = vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &renderer->swapChain);
     mp_assert(!error)
-    // TODO: allcoate images
+
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
 
@@ -513,10 +507,11 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
     VkAttachmentDescription attachments[] = {colorAttachment, depthAttachment};
+    constexpr uint32_t attachmentsSize = arraysize(attachments);
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = arraysize(attachments);
+    renderPassInfo.attachmentCount = attachmentsSize;
     renderPassInfo.pAttachments = attachments;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
@@ -527,24 +522,23 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     mp_assert(!error);
 }
 
-static void PrepareShaderModules(mpVkRenderer *renderer, const mpCallbacks *const callbacks)
+static void PrepareShaderModule(const VkDevice &device, VkShaderModule *shaderModule, const mpCallbacks *const callbacks, const char *filePath)
 {
-    renderer->vertexShader = callbacks->mpReadFile("../assets/shaders/vert.spv");
-    renderer->fragmentShader = callbacks->mpReadFile("../assets/shaders/frag.spv");
+    mpFile shader = callbacks->mpReadFile(filePath);
 
     VkShaderModuleCreateInfo shaderModuleInfo = {};
     shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shaderModuleInfo.codeSize = renderer->vertexShader.size;
-    shaderModuleInfo.pCode = (const uint32_t*)renderer->vertexShader.handle;
+    shaderModuleInfo.codeSize = shader.size;
+    shaderModuleInfo.pCode = (const uint32_t*)shader.handle;
 
-    VkResult error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->vertShaderModule);
+    VkResult error = vkCreateShaderModule(device, &shaderModuleInfo, nullptr, shaderModule);
     mp_assert(!error);
+}
 
-    shaderModuleInfo.codeSize = renderer->fragmentShader.size;
-    shaderModuleInfo.pCode = (const uint32_t*)renderer->fragmentShader.handle;
-
-    error = vkCreateShaderModule(renderer->device, &shaderModuleInfo, nullptr, &renderer->fragShaderModule);
-    mp_assert(!error);
+static void PrepareShaderModules(mpVkRenderer *renderer, const mpCallbacks *const callbacks)
+{
+    PrepareShaderModule(renderer->device, &renderer->vertShaderModule, callbacks, "../assets/shaders/vert.spv");
+    PrepareShaderModule(renderer->device, &renderer->fragShaderModule, callbacks, "../assets/shaders/frag.spv");
 }
 
 static void PrepareVkPipeline(mpVkRenderer *renderer)
@@ -562,6 +556,7 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     fragShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+    constexpr uint32_t shaderStagesSize = arraysize(shaderStages);
 
     VkVertexInputBindingDescription bindingDescription = {};
     bindingDescription.binding = 0;
@@ -597,10 +592,8 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkViewport viewport = {};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)renderer->swapChainExtent.width;
-    viewport.height = (float)renderer->swapChainExtent.height;
+    viewport.width = static_cast<float>(renderer->swapChainExtent.width);
+    viewport.height = static_cast<float>(renderer->swapChainExtent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
@@ -671,7 +664,7 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = arraysize(shaderStages);
+    pipelineInfo.stageCount = shaderStagesSize;
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -687,18 +680,16 @@ static void PrepareVkPipeline(mpVkRenderer *renderer)
     mp_assert(!error);
 }
 
-static uint32_t FindMemoryType(const VkPhysicalDevice *physDevice, uint32_t typeFilter, VkMemoryPropertyFlags propertyFlags)
+inline static uint32_t FindMemoryType(const VkPhysicalDevice &physDevice, uint32_t typeFilter, VkMemoryPropertyFlags propertyFlags)
 {
     VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(*physDevice, &memProperties);
+    vkGetPhysicalDeviceMemoryProperties(physDevice, &memProperties);
 
     for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
-    {
         if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & propertyFlags) == propertyFlags)
             return i;
-    }
 
-    OutputDebugStringA("Failed to find suitable memory type!");
+    puts("Failed to find suitable memory type!");
     return 0;
 }
 
@@ -728,7 +719,7 @@ static void PrepareDepthResources(mpVkRenderer *renderer)
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(&renderer->gpu, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    allocInfo.memoryTypeIndex = FindMemoryType(renderer->gpu, memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     error = vkAllocateMemory(renderer->device, &allocInfo, nullptr, &renderer->depthImageMemory);
     mp_assert(!error);
@@ -745,11 +736,12 @@ static void PrepareVkFrameBuffers(mpVkRenderer *renderer)
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
     {
         VkImageView attachments[] = { renderer->pSwapChainImageViews[i] , renderer->depthImageView };
+        constexpr uint32_t attachmentsSize = arraysize(attachments);
 
         VkFramebufferCreateInfo framebufferInfo = {};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = renderer->renderPass;
-        framebufferInfo.attachmentCount = arraysize(attachments);
+        framebufferInfo.attachmentCount = attachmentsSize;
         framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = renderer->swapChainExtent.width;
         framebufferInfo.height = renderer->swapChainExtent.height;
@@ -777,7 +769,7 @@ static void CreateBuffer(mpVkRenderer *renderer, VkDeviceSize size, VkBufferUsag
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(&renderer->gpu, memRequirements.memoryTypeBits, propertyFlags);
+    allocInfo.memoryTypeIndex = FindMemoryType(renderer->gpu, memRequirements.memoryTypeBits, propertyFlags);
 
     error = vkAllocateMemory(renderer->device, &allocInfo, nullptr, bufferMemory);
     mp_assert(!error);
@@ -873,7 +865,7 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
     }
 }
 
-static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *renderData)
+static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *renderData, mpMemoryRegion *tempMemory)
 {
     // Prepare uniform buffers
     VkDeviceSize bufferSize = sizeof(UniformbufferObject);
@@ -895,7 +887,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
     VkResult error = vkCreateDescriptorPool(renderer->device, &poolInfo, nullptr, &renderer->descriptorPool);
     mp_assert(!error);
     // Prepare descriptorsets
-    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(malloc(sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount));// TODO: use mp memory system
+    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(mpAllocateIntoRegion(tempMemory, sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         pLayouts[i] = renderer->descriptorSetLayout;
 
@@ -907,7 +899,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
 
     error = vkAllocateDescriptorSets(renderer->device, &descriptorSetAllocInfo, renderer->pDescriptorSets);
     mp_assert(!error);
-    // TODO: FUSE LOOPS TOGETHER
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
     {
         VkDescriptorBufferInfo bufferInfo = {};
@@ -926,7 +918,6 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
 
         vkUpdateDescriptorSets(renderer->device, 1, &descriptorWrite, 0, nullptr);
     }
-    free(pLayouts);
     // Prepare command buffers
     VkCommandBufferAllocateInfo cmdBufferAllocInfo = {};
     cmdBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -936,7 +927,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
 
     error = vkAllocateCommandBuffers(renderer->device, &cmdBufferAllocInfo, renderer->pCommandbuffers);
     mp_assert(!error);
-    // TODO: FUSE LOOPS TOGETHER
+
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
     {
         VkCommandBufferBeginInfo beginInfo = {};
@@ -954,9 +945,10 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, const mpRenderData *
         renderPassInfo.renderArea.extent = renderer->swapChainExtent;
 
         VkClearValue clearValues[2];
+        constexpr uint32_t clearValueSize = arraysize(clearValues);
         clearValues[0].color  = { 0.2f, 0.5f, 1.0f, 1.0f };
         clearValues[1].depthStencil = { 1.0f, 0 };
-        renderPassInfo.clearValueCount = arraysize(clearValues);
+        renderPassInfo.clearValueCount = clearValueSize;
         renderPassInfo.pClearValues = clearValues;
 
         vkCmdBeginRenderPass(renderer->pCommandbuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1025,36 +1017,36 @@ static bool32 CheckValidationLayerSupport(mpMemoryRegion *vulkanRegion)
     return layerFound;
 }
 
-void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion)
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory)
 {
-    core->rendererHandle = mpAllocateIntoRegion(vulkanRegion, sizeof(mpVkRenderer));
+    core->rendererHandle = mpAllocateIntoRegion(vulkanMemory, sizeof(mpVkRenderer));
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
 
     bool32 enableValidation = true;
-    if(enableValidation && !CheckValidationLayerSupport(vulkanRegion))
-        printf("WARNING: Validation layers requested, but not available\n");
+    if(enableValidation && !CheckValidationLayerSupport(vulkanMemory))
+        puts("WARNING: Validation layers requested, but not available\n");
 
     PrepareVkRenderer(renderer, enableValidation, &core->callbacks);
-    PrepareVkSwapChain(renderer, vulkanRegion, core->windowInfo.width, core->windowInfo.height);
+    PrepareVkSwapChain(renderer, vulkanMemory, core->windowInfo.width, core->windowInfo.height);
 
     PrepareVkRenderPass(renderer);
     PrepareShaderModules(renderer, &core->callbacks);
     PrepareVkPipeline(renderer);
 
-    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanRegion, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
-    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
-    renderer->pInFlightImageFences =   static_cast<VkFence*>(        mpAllocateIntoRegion(vulkanRegion, sizeof(VkFence) * renderer->swapChainImageCount));
-    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
-    renderer->vertexbuffers =          static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
-    renderer->indexbuffers =           static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanRegion, sizeof(VkBuffer) * core->renderData.meshCount));
-    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
-    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanRegion, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanMemory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanMemory, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanMemory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanMemory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   static_cast<VkFence*>(        mpAllocateIntoRegion(vulkanMemory, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanMemory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->vertexbuffers =          static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanMemory, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->indexbuffers =           static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanMemory, sizeof(VkBuffer) * core->renderData.meshCount));
+    renderer->vertexbufferMemories =   static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanMemory, sizeof(VkDeviceMemory) * core->renderData.meshCount));
+    renderer->indexbufferMemories =    static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanMemory, sizeof(VkDeviceMemory) * core->renderData.meshCount));
 
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, &core->renderData);
-    PrepareVkCommandbuffers(renderer, &core->renderData);
+    PrepareVkCommandbuffers(renderer, &core->renderData, tempMemory);
     PrepareVkSyncObjects(renderer);
 }
 
@@ -1083,7 +1075,7 @@ static void CleanupSwapChain(mpVkRenderer *renderer)
     vkDestroyDescriptorPool(renderer->device, renderer->descriptorPool, nullptr);
 }
 
-static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *renderData, uint32_t width, uint32_t height)
+static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *renderData, uint32_t width, uint32_t height, mpMemoryRegion *tempMemory)
 {
     vkDeviceWaitIdle(renderer->device);
     CleanupSwapChain(renderer);
@@ -1092,7 +1084,7 @@ static void RecreateSwapChain(mpVkRenderer *renderer, const mpRenderData *render
     PrepareVkRenderPass(renderer);
     PrepareVkPipeline(renderer);
     PrepareVkFrameBuffers(renderer);
-    PrepareVkCommandbuffers(renderer, renderData);
+    PrepareVkCommandbuffers(renderer, renderData, tempMemory);
 }
 // Recreates geometry buffers and signals vulkanupdate to recreate swapchain
 void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index)
@@ -1108,9 +1100,9 @@ void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint3
     vkFreeMemory(renderer->device, renderer->vertexbufferMemories[index], nullptr);
     vkFreeMemory(renderer->device, renderer->indexbufferMemories[index], nullptr);
 
-    const uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    const VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    const VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    constexpr uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    constexpr VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    constexpr VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
     const VkDeviceSize vertbufferSize = mesh->vertexCount * sizeof(mpVertex);
     const VkDeviceSize indexbufferSize = mesh->indexCount * sizeof(uint16_t);
@@ -1169,15 +1161,16 @@ static void DrawMeshes(mpHandle rendererHandle, mpRenderData *renderData)
         renderPassInfo.renderArea.extent = renderer->swapChainExtent;
 
         VkClearValue clearValues[2];
+        constexpr uint32_t clearValueSize = arraysize(clearValues);
         clearValues[0].color  = { 0.2f, 0.5f, 1.0f, 1.0f };
         clearValues[1].depthStencil = { 1.0f, 0 };
-        renderPassInfo.clearValueCount = arraysize(clearValues);
+        renderPassInfo.clearValueCount = clearValueSize;
         renderPassInfo.pClearValues = clearValues;
 
         vkCmdBeginRenderPass(renderer->pCommandbuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->graphicsPipeline);
 
-        const VkDeviceSize offsets[] = { 0 };
+        constexpr VkDeviceSize offsets[] = { 0 };
 
         vkCmdBindDescriptorSets(renderer->pCommandbuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipelineLayout, 0, 1, &renderer->pDescriptorSets[i], 0, nullptr);
 
@@ -1198,7 +1191,7 @@ static void DrawMeshes(mpHandle rendererHandle, mpRenderData *renderData)
     }
 }
 
-static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpGlobalLight *gLight, uint32_t imageIndex)
+inline static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpGlobalLight *gLight, uint32_t imageIndex)
 {
     renderer->ubo.Model = camera->model;
     renderer->ubo.View = camera->view;
@@ -1207,14 +1200,14 @@ static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpG
     renderer->ubo.position = gLight->position;
     renderer->ubo.colour = gLight->colour;
 
-    void* data;
-    VkDeviceSize dataSize = sizeof(renderer->ubo);
+    void *data;
+    constexpr size_t dataSize = sizeof(UniformbufferObject);
     vkMapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex], 0, dataSize, 0, &data);
     memcpy(data, &renderer->ubo, dataSize);
     vkUnmapMemory(renderer->device, renderer->pUniformbufferMemories[imageIndex]);
 }
 
-void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
+void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory)
 {
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
 
@@ -1227,12 +1220,12 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
     VkResult imageResult = vkAcquireNextImageKHR(renderer->device, renderer->swapChain, UINT64MAX, renderer->imageAvailableSemaphores[renderer->currentFrame], VK_NULL_HANDLE, &imageIndex);
     if(imageResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height);
+        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height, tempMemory);
         return;
     }
     else if(imageResult != VK_SUCCESS && imageResult != VK_SUBOPTIMAL_KHR)
     {
-        printf("Failed to acquire swap chain image!");
+        puts("Failed to acquire swap chain image!");
     }
 
     UpdateUBOs(renderer, &core->camera, &core->globalLight, imageIndex);
@@ -1275,7 +1268,7 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion)
 
     VkResult presentResult = vkQueuePresentKHR(renderer->presentQueue, &presentInfo);
     if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || core->windowInfo.hasResized)
-        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height);
+        RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height, tempMemory);
     else if(presentResult != VK_SUCCESS)
         puts("Failed to present swap chain image!");
 

@@ -6,8 +6,8 @@
 #include "vulkan\vulkan_win32.h"
 #endif
 
-void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanRegion);
-void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanRegion);
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory);
+void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory);
 void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t meshCount);
 
 void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index);
@@ -15,10 +15,12 @@ void mpVulkanRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint3
 const uint32_t MP_MAX_IMAGES_IN_FLIGHT = 2;
 
 struct QueueFamilyIndices {
-    uint32_t graphicsFamily;
-    bool32 hasGraphicsFamily;
-    uint32_t presentFamily;
-    bool32 hasPresentFamily;
+    struct
+    {
+        uint32_t value;
+        bool32 hasValue;
+    }graphicsFamily, presentFamily;
+
     bool32 isComplete;
 };
 
@@ -96,7 +98,4 @@ struct mpVkRenderer
     VkFence *pInFlightImageFences;
 
     UniformbufferObject ubo;
-
-    mpFile vertexShader;
-    mpFile fragmentShader;
 };

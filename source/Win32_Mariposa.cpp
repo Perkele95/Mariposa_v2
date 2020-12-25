@@ -295,21 +295,22 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
     }
 }
 
-void PlatformPrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency)
+static int64_t perfCountFrequency = 0, lastCounter = 0;
+
+void PlatformPrepareClock()
 {
     LARGE_INTEGER lastCounter_Large = {}, perfCountFrequencyResult = {};
     QueryPerformanceFrequency(&perfCountFrequencyResult);
-    *perfCountFrequency = perfCountFrequencyResult.QuadPart;
+    perfCountFrequency = perfCountFrequencyResult.QuadPart;
     QueryPerformanceCounter(&lastCounter_Large);
-    *lastCounter = lastCounter_Large.QuadPart;
+    lastCounter = lastCounter_Large.QuadPart;
 }
-
-float PlatformUpdateClock(int64_t *lastCounter, int64_t perfCountFrequency)
+float PlatformUpdateClock()
 {
-    LARGE_INTEGER endCounter = {};
-    QueryPerformanceCounter(&endCounter);
-    float result = (float)(endCounter.QuadPart - (*lastCounter)) / (float)perfCountFrequency;
-    *lastCounter = endCounter.QuadPart;
+    LARGE_INTEGER counter = {};
+    QueryPerformanceCounter(&counter);
+    float timestep = static_cast<float>(counter.QuadPart - lastCounter) / static_cast<float>(perfCountFrequency);
+    lastCounter = counter.QuadPart;
 
-    return result;
+    return timestep;
 }

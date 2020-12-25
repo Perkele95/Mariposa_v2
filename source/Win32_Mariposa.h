@@ -7,5 +7,6 @@
 void PlatformCreateWindow(mpWindowData *windowData, const char *name);
 mpCallbacks PlatformGetCallbacks();
 void PlatformPollEvents(mpEventReceiver *pReceiver);
-void PlatformPrepareClock(int64_t *lastCounter, int64_t *perfCountFrequency);
-float PlatformUpdateClock(int64_t *lastCounter, int64_t perfCountFrequency);
+void PlatformPrepareClock();
+// Returns timestep
+float PlatformUpdateClock();

@@ -53,7 +53,8 @@ struct timed_scope
     }
 };
 
-inline static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
+#define MP_PROCESS_PROFILER mpDbgProcessSampledRecords(2000U);
+inline static void mpDbgProcessSampledRecords(const uint32_t samplingLevel)
 {
     static uint32_t dbgSamplingCount = samplingLevel;
 
@@ -83,4 +84,5 @@ inline static void mpDbgProcessSampledRecords(uint32_t samplingLevel)
 
 #else
 #define PROFILE_SCOPE
+#define MP_PROCESS_PROFILER
 #endif
