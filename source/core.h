@@ -131,7 +131,7 @@ enum mpChunkFlags
     CHUNK_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
     CHUNK_FLAG_NEIGHBOUR_EAST   = 0x0020,
     CHUNK_FLAG_NEIGHBOUR_WEST   = 0x0040,
-    CHUNK_FLAG_IS_DIRTY         = 0x0080,
+    CHUNK_FLAG_DIRTY         = 0x0080,
 };
 
 struct mpChunk
@@ -169,8 +169,8 @@ struct mpCameraControls
 
 enum mpRenderFlags
 {
-    MP_RENDER_FLAG_REDRAW_MESHES = 0x0001,
-    MP_RENDER_FLAG_DRAW_DEBUG   = 0x0002,
+    MP_RENDER_FLAG_REDRAW_MESHES        = 0x0001,
+    MP_RENDER_FLAG_ENABLE_VK_VALIDATION = 0x0002,
 };
 
 struct mpGlobalLight

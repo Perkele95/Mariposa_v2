@@ -326,14 +326,14 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion *vulkanReg
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
     if(renderer->swapDetails.formatCount > 0)
     {
-        renderer->swapDetails.pFormats = reinterpret_cast<VkSurfaceFormatKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
+        renderer->swapDetails.pFormats = static_cast<VkSurfaceFormatKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
     }
 
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
     if(renderer->swapDetails.presentModeCount > 0)
     {
-        renderer->swapDetails.pPresentModes = reinterpret_cast<VkPresentModeKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
+        renderer->swapDetails.pPresentModes = static_cast<VkPresentModeKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
     }
 
@@ -382,14 +382,14 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion *vulkanReg
     mp_assert(!error)
 
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
-    renderer->pSwapChainImages = reinterpret_cast<VkImage*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * imageCount));
+    renderer->pSwapChainImages = static_cast<VkImage*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * imageCount));
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
 
     renderer->swapChainImageCount = imageCount;
     renderer->swapChainImageFormat = surfaceFormat.format;
     renderer->swapChainExtent = extent;
 
-    renderer->pSwapChainImageViews = reinterpret_cast<VkImageView*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * renderer->swapChainImageCount));
+    renderer->pSwapChainImageViews = static_cast<VkImageView*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         renderer->pSwapChainImageViews[i] = CreateImageView(renderer->device, renderer->pSwapChainImages[i], renderer->swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 }
@@ -999,7 +999,7 @@ static bool32 CheckValidationLayerSupport(mpMemoryRegion *vulkanRegion)
 {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    VkLayerProperties* availableLayers = reinterpret_cast<VkLayerProperties*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkLayerProperties) * layerCount));
+    VkLayerProperties* availableLayers = static_cast<VkLayerProperties*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkLayerProperties) * layerCount));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
 
     bool32 layerFound = false;
@@ -1017,12 +1017,11 @@ static bool32 CheckValidationLayerSupport(mpMemoryRegion *vulkanRegion)
     return layerFound;
 }
 
-void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory)
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory, bool32 enableValidation)
 {
     core->rendererHandle = mpAllocateIntoRegion(vulkanMemory, sizeof(mpVkRenderer));
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
 
-    bool32 enableValidation = true;
     if(enableValidation && !CheckValidationLayerSupport(vulkanMemory))
         puts("WARNING: Validation layers requested, but not available\n");
 

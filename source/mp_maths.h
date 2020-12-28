@@ -558,3 +558,13 @@ struct gridU32
 {
     uint32_t x, y, z;
 };
+
+inline uint32_t uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
+{
+    if(value < min)
+        value = min;
+    else if(value > max)
+        value = max;
+
+    return value;
+}

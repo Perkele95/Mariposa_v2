@@ -4,51 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#if 0
-static mpMesh mpCreateDebugChunkLines(const mpWorldData &worldData, const gridU32 bounds, mpMemoryRegion *meshMemory, mpMemoryRegion *tempMemory)
-{
-    const vec3 normal = {0.0f, 0.0f, 0.0f};
-    const vec4 colour = {1.0f, 1.0f, 1.0f, 1.0f};
 
-    mpMesh mesh = {};
-    constexpr size_t vertexBlockSize = sizeof(mpVertex) * 12 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(tempMemory, vertexBlockSize));
-
-    constexpr size_t indexBlockSize = sizeof(uint16_t) * 18 * MP_CHUNK_SIZE * MP_CHUNK_SIZE * MP_CHUNK_SIZE;
-    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(tempMemory, indexBlockSize));
-
-    uint16_t vertexCount = 0, indexCount = 0;
-    for(uint32_t y = 0; y < bounds.y; y++)
-    {
-        for(uint32_t x = 0; x < bounds.x; x++)
-        {
-            const vec2 pos = {
-                static_cast<float>(x * MP_CHUNK_SIZE),
-                static_cast<float>(y * MP_CHUNK_SIZE),
-            };
-            /*
-            const mpVertex widthLineVertices[] = {
-                {{0.0f, 0.0f, 0.0f}, normal, colour},
-                {{1.0f, 0.0f, 0.0f}, normal, colour},
-            };*/
-            const mpVertex heightLineVertices[] = {
-                {{pos.x, pos.y, 0.0f}, normal, colour},
-                {{pos.x, pos.y, 100.0f}, normal, colour},
-            };
-            /*
-            const mpVertex depthLineVertices[] = {
-                {{0.0f, 0.0f, 0.0f}, normal, colour},
-                {{0.0f, 1.0f, 0.0f}, normal, colour},
-            };*/
-            constexpr size_t vertexCopySize = arraysize(heightLineVertices);
-            memcpy(&mesh.vertices[vertexCount], heightLineVertices, vertexCopySize);
-        }
-    }
-
-    mpMesh mesh = {};
-    return mesh;
-}
-#endif
 constexpr float vScale = 1.0f;
 constexpr mpQuadFaceArray mpQuadFaceNorth = {
     vec3{ vScale, -vScale,  vScale},
@@ -437,41 +393,44 @@ static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpC
     }
 }
 
-static void mpPaintVoxelBlock(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+static void mpCreateVoxelBlock(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type)
 {
-    mpVoxel *result = nullptr;
-    for(uint32_t step = 1; step <= 20; step++)
+    // Find closest active block or get the last one
+    vec3 rayCastHit = origin + direction;
+    for(uint32_t step = 0; step < 20; step++)
     {
-        vec3 raycastHit = origin + direction * static_cast<float>(step);
-
-        mpChunk *chunk = mpGetContainingChunk(worldData, raycastHit);
+        rayCastHit += direction;
+        mpChunk *chunk = mpGetContainingChunk(worldData, rayCastHit);
         if(chunk != nullptr)
         {
-            // Convert raycastHit to local chunk space
-            raycastHit -= chunk->position;
-            gridU32 index = mpVec3ToGridU32(raycastHit);
+            const vec3 localHit = rayCastHit - chunk->position;
+            gridU32 index = mpVec3ToGridU32(localHit);
 
-            const mpVoxel *previous = result;
-            result = &chunk->voxels[index.x][index.y][index.z];
-            if(result->flags & VOXEL_FLAG_ACTIVE)
-            {
-                constexpr uint32_t max = MP_CHUNK_SIZE - 1;
-                for(uint32_t z = index.z - 1; z <= index.z + 1; z++)
-                {
-                    for(uint32_t y = index.y - 1; y <= index.y + 1; y++)
-                    {
-                        for(uint32_t x = index.x - 1; x <= index.x + 1; x++)
-                        {
-                            if(x > 0 && y > 0 && z > 0 && x < max && y < max && z < max)
-                            {
-                                chunk->voxels[x][y][z].type = type;
-                                chunk->voxels[x][y][z].flags = VOXEL_FLAG_ACTIVE;
-                            }
-                        }
-                    }
-                }
-                chunk->flags |= CHUNK_FLAG_IS_DIRTY;
+            mpVoxel &result = chunk->voxels[index.x][index.y][index.z];
+            if(result.flags & VOXEL_FLAG_ACTIVE)
                 break;
+        }
+    }
+    // Fetch each block around target and set to active
+    constexpr uint32_t size = 4;
+    for(uint32_t z = 0; z < size; z++)
+    {
+        for(uint32_t y = 0; y < size; y++)
+        {
+            for(uint32_t x = 0; x < size; x++)
+            {
+                const vec3 target = rayCastHit + mpGridU32ToVec3(gridU32{x,y,z});
+                mpChunk *chunk = mpGetContainingChunk(worldData, target);
+                if(chunk != nullptr)
+                {
+                    const vec3 localHit = target - chunk->position;
+                    gridU32 index = mpVec3ToGridU32(localHit);
+
+                    mpVoxel &result = chunk->voxels[index.x][index.y][index.z];
+                    result.flags = VOXEL_FLAG_ACTIVE;
+                    result.type = type;
+                    chunk->flags |= CHUNK_FLAG_DIRTY;
+                }
             }
         }
     }
@@ -494,7 +453,7 @@ static void mpPaintVoxel(const mpWorldData &worldData, const vec3 origin, const 
             {
                 result.type = type;
                 result.modifier = mod;
-                chunk->flags |= CHUNK_FLAG_IS_DIRTY;
+                chunk->flags |= CHUNK_FLAG_DIRTY;
                 break;
             }
         }
@@ -535,7 +494,7 @@ int main(int argc, char *argv[])
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
-    core.renderFlags |= MP_RENDER_FLAG_DRAW_DEBUG;
+    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
@@ -565,7 +524,7 @@ int main(int argc, char *argv[])
     core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, meshHeaderMemory, tempMemory, table);
 
     mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
-    mpVulkanInit(&core, vulkanMemory, tempMemory);
+    mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
 
     mpPrintMemoryInfo(chunkMemory, "chunkmemory");
     mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
@@ -639,7 +598,7 @@ int main(int argc, char *argv[])
         else if(core.camControls.flags & MP_KEY_D)
             player.position += left * core.camera.speed * timestep;
         // Update camera matrices
-        core.camera.position = {player.position.x, player.position.y, player.position.z + 1.0f};
+        core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
         core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
@@ -647,15 +606,15 @@ int main(int argc, char *argv[])
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
             mpPaintVoxel(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE, VOXEL_TYPE_MOD_DARK);
         if(core.eventReceiver.keyPressedEvents & MP_KEY_E)
-            mpPaintVoxelBlock(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE);
+            mpCreateVoxelBlock(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE);
         // Recreate mesh for dirty chunks
         for(uint32_t i = 0; i < core.worldData.chunkCount; i++)
         {
-            if(core.worldData.chunks[i].flags & CHUNK_FLAG_IS_DIRTY)
+            if(core.worldData.chunks[i].flags & CHUNK_FLAG_DIRTY)
             {
                 core.worldData.chunks[i] = mpSetDrawFlags(core.worldData.chunks[i]);
                 core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory, table);
-                core.worldData.chunks[i].flags ^= CHUNK_FLAG_IS_DIRTY;
+                core.worldData.chunks[i].flags ^= CHUNK_FLAG_DIRTY;
                 mpVulkanRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
                 core.renderFlags |= MP_RENDER_FLAG_REDRAW_MESHES;
             }

@@ -31,6 +31,15 @@ inline gridU32 mpVec3ToGridU32(vec3 a)
     };
     return result;
 }
+inline vec3 mpGridU32ToVec3(gridU32 a)
+{
+    vec3 result = {
+        static_cast<float>(a.x),
+        static_cast<float>(a.y),
+        static_cast<float>(a.z)
+    };
+    return result;
+}
 
 static mpChunk* mpGetContainingChunk(const mpWorldData &worldData, vec3 position)
 {

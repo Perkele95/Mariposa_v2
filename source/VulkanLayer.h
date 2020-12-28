@@ -6,7 +6,7 @@
 #include "vulkan\vulkan_win32.h"
 #endif
 
-void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory);
+void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory, bool32 enableValidation);
 void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory);
 void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t meshCount);
 
