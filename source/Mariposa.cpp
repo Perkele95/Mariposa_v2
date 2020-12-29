@@ -353,6 +353,44 @@ static mpRenderData mpGenerateRenderData(const mpWorldData *worldData, mpMemoryP
     return renderData;
 }
 
+static mpGUI::renderData mpCreateGuiData(mpMemoryRegion *staticMemory, uint32_t screenWidth, uint32_t screenHeight)
+{
+    constexpr size_t vertexSize = sizeof(mpGUI::vertex);
+    constexpr size_t indexSize = sizeof(uint16_t);
+    // Create list of gui elements
+    // Format: { topLeft, bottomRight }
+    constexpr mpGUI::rect2D rect2DList[] = {
+        {{100, 100}, {500, 200}},
+        {{100, 250}, {500, 350}},
+        {{100, 400}, {500, 500}},
+    };
+    constexpr uint32_t rect2DListCount = arraysize(rect2DList);
+    constexpr uint32_t quadVertexCount = arraysize(mpGUI::quad::vertices);
+    constexpr uint32_t quadIndexCount = arraysize(mpGUI::quad::indices);
+
+    constexpr size_t vertexStride = sizeof(mpGUI::vertex) * quadVertexCount;
+    constexpr size_t vertexAllocSize = vertexStride * rect2DListCount;
+    constexpr size_t indexStride = sizeof(uint16_t) * quadIndexCount;
+    constexpr size_t indexAllocSize = indexStride * rect2DListCount;
+    // Allocate necessary data
+    mpGUI::renderData result = {};
+    result.vertices = static_cast<mpGUI::vertex*>(mpAllocateIntoRegion(staticMemory, vertexAllocSize));
+    result.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(staticMemory, indexAllocSize));
+    result.vertexCount = rect2DListCount * quadVertexCount;
+    result.indexCount = rect2DListCount * quadIndexCount;
+    // Merge gui elements into big data block
+    for(uint32_t rect = 0; rect < rect2DListCount; rect++)
+    {
+        mpGUI::quad newQuad = mpGUI::quadFromRect(rect2DList[rect], {1.0f, 1.0f, 1.0f, 0.2f}, {screenWidth, screenHeight});
+        for(uint32_t i = 0; i < quadIndexCount; i++)
+            newQuad.indices[i] += static_cast<uint16_t>(quadVertexCount * rect);
+
+        memcpy(result.vertices + quadVertexCount * rect, newQuad.vertices, vertexStride);
+        memcpy(result.indices + quadIndexCount * rect, newQuad.indices, indexStride);
+    }
+    return result;
+}
+
 static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpCameraControls *cameraControls)
 {
     constexpr mpKeyEvent keyList[] = {
@@ -518,11 +556,11 @@ int main(int argc, char *argv[])
     mpMemoryPool smallPool = mpCreateMemoryPool(6, MegaBytes(1), 2);
 
     mpMemoryRegion *chunkMemory = mpGetMemoryRegion(&chunkPool);
-    mpMemoryRegion *meshHeaderMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion *staticMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&chunkPool);
 
     mpVoxelTypeTable* table = mpCreateVoxelTypeTable(
-        mpAllocateIntoRegion(meshHeaderMemory, sizeof(mpVoxelTypeTable))
+        mpAllocateIntoRegion(staticMemory, sizeof(mpVoxelTypeTable))
     );
     mpRegisterVoxelType(table, {0.1f, 0.3f, 0.15f, 1.0f}, VOXEL_TYPE_GRASS);
     mpRegisterVoxelType(table, {0.3f, 0.2f, 0.2f, 1.0f}, VOXEL_TYPE_DIRT);
@@ -535,13 +573,15 @@ int main(int argc, char *argv[])
     core.worldData = mpGenerateWorldData(core.worldData.bounds, chunkMemory);
 
     mpMemoryPool meshPool = mpCreateMemoryPool(core.worldData.chunkCount, MegaBytes(1), 42);
-    core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, meshHeaderMemory, tempMemory, table);
+    core.renderData = mpGenerateRenderData(&core.worldData, &meshPool, staticMemory, tempMemory, table);
+
+    core.guiData = mpCreateGuiData(staticMemory, core.windowInfo.width, core.windowInfo.height);
 
     mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
 
-    mpPrintMemoryInfo(chunkMemory, "chunkmemory");
-    mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
+    mpPrintMemoryInfo(chunkMemory, "staticMemory");
+    mpPrintMemoryInfo(staticMemory, "meshHeaderMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
     MP_LOG_INFO("Meshpool consumes: %zu memory\n", core.worldData.chunkCount * sizeof(mpChunk));
 
@@ -630,7 +670,7 @@ int main(int argc, char *argv[])
                 core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory, table);
                 core.worldData.chunks[i].flags ^= CHUNK_FLAG_DIRTY;
                 mpVkRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
-                core.renderFlags |= MP_RENDER_FLAG_REDRAW_MESHES;
+                core.renderFlags |= MP_RENDER_FLAG_REDRAW_REQUIRED;
             }
         }
         // Renderer :: Render

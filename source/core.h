@@ -6,6 +6,7 @@
 #include "mp_maths.h"
 #include "permutation.h"
 #include "events.h"
+#include "mpGui.h"
 
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
@@ -157,7 +158,7 @@ struct mpCameraControls
 
 enum mpRenderFlags
 {
-    MP_RENDER_FLAG_REDRAW_MESHES        = 0x0001,
+    MP_RENDER_FLAG_REDRAW_REQUIRED        = 0x0001,
     MP_RENDER_FLAG_ENABLE_VK_VALIDATION = 0x0002,
 };
 
@@ -182,6 +183,7 @@ struct mpCore
 
     mpWorldData worldData;
     mpRenderData renderData;
+    mpGUI::renderData guiData;
 
     mpGlobalLight globalLight;
 };
@@ -191,27 +193,4 @@ struct mpEntity
     vec3 position, velocity, force;
     float mass, speed;
     uint32_t physState;
-};
-
-struct mpGUI
-{
-    struct vertex
-    {
-        vec2 position;
-        vec4 colour;
-    };
-    struct quad
-    {
-        vertex vertices[4];
-        uint16_t indices[6];
-    };
-};
-
-constexpr mpGUI::quad guiTest = {
-    {
-        {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{0.5f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
-    },  {0, 1, 2, 2, 3, 0}
 };

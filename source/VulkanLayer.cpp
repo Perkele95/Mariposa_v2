@@ -345,7 +345,7 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     printf("Vulkan instance, physical device, logical device, descriptor set layouts and command pool prepared\n");
 }
 
-static uint32_t Uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
+inline static uint32_t Uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
 {
     if(value < min)
         value = min;
@@ -379,7 +379,7 @@ static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat form
     return imageView;
 }
 
-VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR *availableFormats, uint32_t formatCount)
+inline VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR *availableFormats, uint32_t formatCount)
 {
     for(uint32_t i = 0; i < formatCount; i++)
         if(availableFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB && availableFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
@@ -388,7 +388,7 @@ VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR *availableFormats,
     return availableFormats[0];
 }
 
-VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresentModes, uint32_t presentModeCount)
+inline VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresentModes, uint32_t presentModeCount)
 {
     /* NOTE:
         VK_PRESENT_MODE_IMMEDIATE_KHR   == Vsync OFF
@@ -404,7 +404,7 @@ VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresentModes, 
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windowWidth, int32_t windowHeight)
+inline VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windowWidth, int32_t windowHeight)
 {
     if(capabilities.currentExtent.width != 0xFFFFFFFF)
     {
@@ -624,7 +624,7 @@ static void PrepareVkRenderPass(mpVkRenderer *renderer)
     mp_assert(!error);
 }
 
-static void PrepareShaderModule(const VkDevice &device, VkShaderModule *shaderModule, const mpCallbacks *const callbacks, const char *filePath)
+inline static void PrepareShaderModule(const VkDevice &device, VkShaderModule *shaderModule, const mpCallbacks *const callbacks, const char *filePath)
 {
     mpFile shader = callbacks->mpReadFile(filePath);
 
@@ -860,8 +860,6 @@ static void PrepareVkGuiPipeline(mpVkRenderer *renderer)
 
     VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
     colourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colourBlendAttachment.blendEnable = VK_FALSE;
-    /*
     colourBlendAttachment.blendEnable = VK_TRUE;
     colourBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     colourBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -869,7 +867,7 @@ static void PrepareVkGuiPipeline(mpVkRenderer *renderer)
     colourBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
     colourBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     colourBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    */
+
     VkPipelineColorBlendStateCreateInfo colourblend = {};
     colourblend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colourblend.logicOpEnable = VK_FALSE;
@@ -1090,14 +1088,14 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpRenderData 
     }
 }
 
-static void PrepareVkGUIbuffers(mpVkRenderer *renderer, const mpGUI::quad &quad)
+static void PrepareVkGUIbuffer(mpVkRenderer *renderer, const mpGUI::renderData &guiData)
 {
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     const VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     const VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-    constexpr VkDeviceSize vertbufferSize = arraysize(quad.vertices) * sizeof(mpGUI::vertex);
-    constexpr VkDeviceSize indexbufferSize = arraysize(quad.indices) * sizeof(uint16_t);
+    const VkDeviceSize vertbufferSize = guiData.vertexCount * sizeof(mpGUI::vertex);
+    const VkDeviceSize indexbufferSize = guiData.indexCount * sizeof(uint16_t);
     VkBuffer vertStagingbuffer, indexStagingbuffer;
     VkDeviceMemory vertStagingbufferMemory, indexStagingbufferMemory;
     void *vertData, *indexData;
@@ -1106,8 +1104,8 @@ static void PrepareVkGUIbuffers(mpVkRenderer *renderer, const mpGUI::quad &quad)
     CreateBuffer(renderer, indexbufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &indexStagingbuffer, &indexStagingbufferMemory);
     vkMapMemory(renderer->device, vertStagingbufferMemory, 0, vertbufferSize, 0, &vertData);
     vkMapMemory(renderer->device, indexStagingbufferMemory, 0, indexbufferSize, 0, &indexData);
-    memcpy(vertData, quad.vertices, static_cast<size_t>(vertbufferSize));
-    memcpy(indexData, quad.indices, static_cast<size_t>(indexbufferSize));
+    memcpy(vertData, guiData.vertices, static_cast<size_t>(vertbufferSize));
+    memcpy(indexData, guiData.indices, static_cast<size_t>(indexbufferSize));
     vkUnmapMemory(renderer->device, vertStagingbufferMemory);
     vkUnmapMemory(renderer->device, indexStagingbufferMemory);
 
@@ -1282,24 +1280,23 @@ inline static void drawIndexed(VkCommandBuffer commandbuffer, VkBuffer *vertexbu
     vkCmdDrawIndexed(commandbuffer, indexCount, 1, 0, 0, 0);
 }
 
-static void DrawAllMeshes(mpVkRenderer &renderer, const mpRenderData &renderData)
+static void DrawImages(mpVkRenderer &renderer, const mpRenderData &renderData, const mpGUI::renderData &guiData)
 {
-    for(uint32_t i = 0; i < renderer.swapChainImageCount; i++)
+    vkDeviceWaitIdle(renderer.device);
+    for(uint32_t image = 0; image < renderer.swapChainImageCount; image++)
     {
-        VkCommandBuffer &commandBuffer = renderer.pCommandbuffers[i];
-
-        beginRender(commandBuffer, renderer.renderPass, renderer.pFramebuffers[i], renderer.swapChainExtent);
+        VkCommandBuffer &commandBuffer = renderer.pCommandbuffers[image];
+        beginRender(commandBuffer, renderer.renderPass, renderer.pFramebuffers[image], renderer.swapChainExtent);
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.pipelineLayout, 0, 1, &renderer.pDescriptorSets[i], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.pipelineLayout, 0, 1, &renderer.pDescriptorSets[image], 0, nullptr);
 
         for(uint32_t mesh = 0; mesh < renderData.meshCount; mesh++)
             if(renderData.meshes[mesh].vertexCount > 0)
                 drawIndexed(commandBuffer, &renderer.vertexbuffers[mesh], renderer.indexbuffers[mesh], renderData.meshes[mesh].indexCount);
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.gui.pipeline);
-        constexpr uint32_t guiIndexCount = arraysize(guiTest.indices);
-        drawIndexed(commandBuffer, &renderer.gui.vertexbuffer, renderer.gui.indexbuffer, guiIndexCount);
+        drawIndexed(commandBuffer, &renderer.gui.vertexbuffer, renderer.gui.indexbuffer, guiData.indexCount);
 
         endRender(commandBuffer);
     }
@@ -1334,10 +1331,10 @@ void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *te
 
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, &core->renderData);
-    PrepareVkGUIbuffers(renderer, guiTest);
+    PrepareVkGUIbuffer(renderer, core->guiData);
     PrepareVkCommandbuffers(renderer, &core->renderData, tempMemory);
     PrepareVkSyncObjects(renderer);
-    DrawAllMeshes(*renderer, core->renderData);
+    DrawImages(*renderer, core->renderData, core->guiData);
 }
 
 static void CleanupSwapChain(mpVkRenderer *renderer)
@@ -1456,6 +1453,12 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *
 
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
 
+    if(core->renderFlags & MP_RENDER_FLAG_REDRAW_REQUIRED)
+    {
+        DrawImages(*renderer, core->renderData, core->guiData);
+        core->renderFlags &= ~MP_RENDER_FLAG_REDRAW_REQUIRED;
+    }
+
     vkWaitForFences(renderer->device, 1, &renderer->inFlightFences[renderer->currentFrame], VK_TRUE, UINT64MAX);
 
     uint32_t imageIndex = 0;
@@ -1463,7 +1466,7 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *
     if(imageResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
         RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height, tempMemory);
-        DrawAllMeshes(*renderer, core->renderData);
+        core->renderFlags |= MP_RENDER_FLAG_REDRAW_REQUIRED;
         return;
     }
     else if(imageResult != VK_SUCCESS && imageResult != VK_SUBOPTIMAL_KHR)
@@ -1475,8 +1478,6 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *
 
     if(renderer->pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(renderer->device, 1, &renderer->pInFlightImageFences[imageIndex], VK_TRUE, UINT64MAX);
-    if(core->renderFlags & MP_RENDER_FLAG_REDRAW_MESHES)
-        DrawAllMeshes(*renderer, core->renderData);
 
     renderer->pInFlightImageFences[imageIndex] = renderer->inFlightFences[renderer->currentFrame];
 
@@ -1513,9 +1514,8 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *
     if(presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR || core->windowInfo.hasResized)
     {
         RecreateSwapChain(renderer, &core->renderData, core->windowInfo.width, core->windowInfo.height, tempMemory);
-        DrawAllMeshes(*renderer, core->renderData);
+        core->renderFlags |= MP_RENDER_FLAG_REDRAW_REQUIRED;
     }
-
     renderer->currentFrame = (renderer->currentFrame + 1) % MP_MAX_IMAGES_IN_FLIGHT;
 }
 
