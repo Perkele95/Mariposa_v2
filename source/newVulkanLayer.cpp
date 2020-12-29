@@ -48,30 +48,32 @@ struct mpVkRenderer
     VkQueue presentQueue;
     QueueFamilyIndices indices;
 
+    VkCommandPool commandPool;
+
     VkSwapchainKHR swapChain;
-    VkImage *pSwapChainImages;
-    VkImageView *pSwapChainImageViews;
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
-    uint32_t swapChainImageCount;
     SwapChainSupportDetails swapDetails;
-
-    VkRenderPass renderPass;
-    VkDescriptorPool descriptorPool;
-    VkDescriptorSet *pDescriptorSets;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkPipelineLayout pipelineLayout;
-
-    VkFramebuffer *pFramebuffers;
-    bool32 *pFramebufferResized;
-    uint32_t currentFrame;
-
-    VkCommandPool commandPool;
-    VkCommandBuffer *pCommandbuffers;
 
     struct
     {
-        VkPipeline graphicsPipeline;
+        VkRenderPass renderPass;
+
+        VkPipeline pipeline;
+        VkPipelineLayout pipelineLayout;
+        VkDescriptorPool descriptorPool;
+        VkDescriptorSet *pDescriptorSets;
+        VkDescriptorSetLayout descriptorSetLayout;
+
+        VkCommandBuffer *pCommandbuffers;
+
+        VkImage *pSwapChainImages;
+        VkImageView *pSwapChainImageViews;
+        uint32_t swapChainImageCount;
+
+        VkFramebuffer *pFramebuffers;
+        bool32 *pFramebufferResized;
+        uint32_t currentFrame;
 
         VkBuffer *vertexbuffers;
         VkDeviceMemory *vertexbufferMemories;
@@ -80,13 +82,31 @@ struct mpVkRenderer
         VkBuffer *pUniformbuffers;
         VkDeviceMemory *pUniformbufferMemories;
 
+        VkImage depthImage;
+        VkFormat depthFormat;
+        VkDeviceMemory depthImageMemory;
+        VkImageView depthImageView;
+
+        VkSemaphore imageAvailableSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
+        VkSemaphore renderFinishedSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
+        VkFence inFlightFences[MP_MAX_IMAGES_IN_FLIGHT];
+        VkFence *pInFlightImageFences;
+
         VkShaderModule vertShaderModule;
         VkShaderModule fragShaderModule;
     } scene;
 
     struct
     {
-        VkPipeline graphicsPipeline;
+        VkRenderPass renderPass;
+
+        VkPipeline pipeline;
+        VkPipelineLayout pipelineLayout;
+        VkDescriptorPool descriptorPool;
+        VkDescriptorSet *pDescriptorSets;
+        VkDescriptorSetLayout descriptorSetLayout;
+
+        VkCommandBuffer commandbuffer;
 
         VkBuffer vertexbuffer;
         VkDeviceMemory vertexbufferMemory;
@@ -96,16 +116,6 @@ struct mpVkRenderer
         VkShaderModule vertShaderModule;
         VkShaderModule fragShaderModule;
     } gui;
-
-    VkImage depthImage;
-    VkFormat depthFormat;
-    VkDeviceMemory depthImageMemory;
-    VkImageView depthImageView;
-
-    VkSemaphore imageAvailableSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
-    VkSemaphore renderFinishedSemaphores[MP_MAX_IMAGES_IN_FLIGHT];
-    VkFence inFlightFences[MP_MAX_IMAGES_IN_FLIGHT];
-    VkFence *pInFlightImageFences;
 
     mpUniformBufferObject ubo;
 };

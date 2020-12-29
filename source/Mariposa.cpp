@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-constexpr float vScale = 1.0f;
 constexpr mpQuadFaceArray mpQuadFaceNorth = {
     vec3{ vScale, -vScale,  vScale},
     vec3{ vScale, -vScale, -vScale},
@@ -61,8 +60,6 @@ static mpQuad mpCreateQuad(const mpQuadFaceArray &quadFace, vec3 offset, vec4 co
 
     return quad;
 }
-
-static size_t largestChunkSize = 0;
 // mpCreateMesh resets tempMemory after use.
 static mpMesh mpCreateMesh(mpChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory, mpVoxelTypeTable *typeTable)
 {
@@ -86,16 +83,12 @@ static mpMesh mpCreateMesh(mpChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryR
         for(uint32_t y = 0; y < MP_CHUNK_SIZE; y++){
             for(uint32_t x = 0; x < MP_CHUNK_SIZE; x++)
             {
-                mpVoxel voxel = chunk->voxels[x][y][z];
+                mpVoxel &voxel = chunk->voxels[x][y][z];
                 if((voxel.flags & VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
                 const vec4 colour = mpGetVoxelColour(typeTable, voxel.type, voxel.modifier);
-                const vec3 positionOffset = {
-                    static_cast<float>(x) + chunk->position.x,
-                    static_cast<float>(y) + chunk->position.y,
-                    static_cast<float>(z) + chunk->position.z,
-                };
+                const vec3 positionOffset = chunk->position + mpGridU32ToVec3({x, y, z});
 
                 if(voxel.flags & VOXEL_FLAG_DRAW_NORTH)
                 {
@@ -183,8 +176,6 @@ static mpMesh mpCreateMesh(mpChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryR
 
     mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(mesh.memReg, verticesSize));
     mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(mesh.memReg, indicesSize));
-    if(mesh.memReg->dataSize > largestChunkSize)
-        largestChunkSize += mesh.memReg->dataSize;
 
     memcpy(mesh.vertices, tempBlockVertices, verticesSize);
     memcpy(mesh.indices, tempBlockIndices, indicesSize);
@@ -195,11 +186,6 @@ static mpMesh mpCreateMesh(mpChunk *chunk, mpMemoryRegion *meshRegion, mpMemoryR
 // TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
 static mpChunk mpGenerateChunkTerrain(mpChunk chunk)
 {
-    /* 3D Noise constants
-    const float threshold = -0.2f;
-    const float typeThreshold = -1.0f;
-    const float noiseFactor = 10.0f;
-    */
     constexpr float surfaceLevel = 40.0f;
     constexpr float granularity = 0.05f;
     constexpr float moistureFactor = 0.4f;
@@ -221,13 +207,6 @@ static mpChunk mpGenerateChunkTerrain(mpChunk chunk)
                     continue;
                 chunk.voxels[x][y][z].flags = VOXEL_FLAG_ACTIVE;
                 chunk.voxels[x][y][z].type = VOXEL_TYPE_GRASS;
-                /*
-                const float noiseValue = noiseFactor * perlin3Dmap(globalPos / noiseFactor);
-
-                if(noiseValue < threshold)
-                    chunk.voxels[x][y][z].flags = VOXEL_FLAG_ACTIVE;
-                chunk.voxels[x][y][z].type = noiseValue < typeThreshold ? VOXEL_TYPE_GRASS : VOXEL_TYPE_DIRT;
-                */
             }
         }
     }
@@ -383,19 +362,17 @@ static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpC
         MP_KEY_A, MP_KEY_D,
     };
     constexpr uint32_t listSize = arraysize(keyList);
-
-    for(uint32_t i = 0; i < listSize; i++)
+    for(uint32_t key = 0; key < listSize; key++)
     {
-        if(eventReceiver.keyPressedEvents & keyList[i])
-            cameraControls->flags |= keyList[i];
-        else if(eventReceiver.keyReleasedEvents & keyList[i])
-            cameraControls->flags &= ~keyList[i];
+        if(eventReceiver.keyPressedEvents & keyList[key])
+            cameraControls->flags |= keyList[key];
+        else if(eventReceiver.keyReleasedEvents & keyList[key])
+            cameraControls->flags &= ~keyList[key];
     }
 }
 
-static void mpCreateVoxelBlock(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+static vec3 mpRayCast(const mpWorldData &worldData, const vec3 origin, const vec3 direction)
 {
-    // Find closest active block or get the last one
     vec3 rayCastHit = origin + direction;
     for(uint32_t step = 0; step < 20; step++)
     {
@@ -406,11 +383,48 @@ static void mpCreateVoxelBlock(const mpWorldData &worldData, const vec3 origin, 
             const vec3 localHit = rayCastHit - chunk->position;
             gridU32 index = mpVec3ToGridU32(localHit);
 
-            mpVoxel &result = chunk->voxels[index.x][index.y][index.z];
-            if(result.flags & VOXEL_FLAG_ACTIVE)
+            if(chunk->voxels[index.x][index.y][index.z].flags & VOXEL_FLAG_ACTIVE)
                 break;
         }
     }
+    return rayCastHit;
+}
+// TODO: optimise
+static void mpCreateVoxelSphere(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+{
+    vec3 rayCastHit = mpRayCast(worldData, origin, direction);
+    // Paint sphere
+    constexpr int32_t size = 8;
+    constexpr int32_t start = -(size/2);
+    for(int32_t z = start; z < size; z++)
+    {
+        for(int32_t y = start; y < size; y++)
+        {
+            for(int32_t x = start; x < size; x++)
+            {
+                const vec3 target = rayCastHit + mpGrid32ToVec3(grid32{x,y,z});
+                mpChunk *chunk = mpGetContainingChunk(worldData, target);
+                if(chunk != nullptr)
+                {
+                    const vec3 localHit = target - chunk->position;
+                    if(vec3Length(target - rayCastHit) < 4.0f)
+                    {
+                        gridU32 index = mpVec3ToGridU32(localHit);
+
+                        mpVoxel &result = chunk->voxels[index.x][index.y][index.z];
+                        result.flags = VOXEL_FLAG_ACTIVE;
+                        result.type = type;
+                        chunk->flags |= CHUNK_FLAG_DIRTY;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void mpCreateVoxelBlock(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+{
+    vec3 rayCastHit = mpRayCast(worldData, origin, direction);
     // Fetch each block around target and set to active
     constexpr uint32_t size = 4;
     for(uint32_t z = 0; z < size; z++)
@@ -436,7 +450,7 @@ static void mpCreateVoxelBlock(const mpWorldData &worldData, const vec3 origin, 
     }
 }
 
-static void mpPaintVoxel(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type, mpBitFieldShort mod = VOXEL_TYPE_MOD_DEFAULT)
+inline static void mpPaintVoxel(const mpWorldData &worldData, const vec3 origin, const vec3 direction, mpBitFieldShort type, mpBitFieldShort mod = VOXEL_TYPE_MOD_DEFAULT)
 {
     for(uint32_t step = 1; step <= 20; step++)
     {
@@ -473,7 +487,7 @@ static void mpEntityPhysics(const mpWorldData &worldData, mpEntity &entity, floa
         {
             // Collision response
             entity.force.z += MP_GRAVITY_CONSTANT;
-            entity.velocity.z = 0.1f;
+            entity.velocity.z = 0.2f;
         }
     }
     // F = ma => a = F/m
@@ -506,13 +520,13 @@ int main(int argc, char *argv[])
     mpMemoryRegion *chunkMemory = mpGetMemoryRegion(&chunkPool);
     mpMemoryRegion *meshHeaderMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&chunkPool);
-    // TODO: This is fugly; add some pipe forward operator or split it up
+
     mpVoxelTypeTable* table = mpCreateVoxelTypeTable(
         mpAllocateIntoRegion(meshHeaderMemory, sizeof(mpVoxelTypeTable))
     );
-    mpRegisterVoxelType(table, {0.0f, 0.3f, 0.05f, 1.0f}, VOXEL_TYPE_GRASS);
+    mpRegisterVoxelType(table, {0.1f, 0.3f, 0.15f, 1.0f}, VOXEL_TYPE_GRASS);
     mpRegisterVoxelType(table, {0.3f, 0.2f, 0.2f, 1.0f}, VOXEL_TYPE_DIRT);
-    mpRegisterVoxelType(table, {0.3f, 0.3f, 0.3f, 1.0f}, VOXEL_TYPE_STONE);
+    mpRegisterVoxelType(table, {1.0f, 1.0f, 1.0f, 1.0f}, VOXEL_TYPE_STONE);
     mpRegisterVoxelType(table, {0.1f, 0.1f, 0.1f, 1.0f}, VOXEL_TYPE_STONE, VOXEL_TYPE_MOD_DARK);
     mpRegisterVoxelType(table, {0.3f, 0.1f, 0.1f, 1.0f}, VOXEL_TYPE_WOOD);
     mpRegisterVoxelType(table, {0.0f, 0.2f, 0.0f, 1.0f}, VOXEL_TYPE_GRASS, VOXEL_TYPE_MOD_DARK);
@@ -529,7 +543,6 @@ int main(int argc, char *argv[])
     mpPrintMemoryInfo(chunkMemory, "chunkmemory");
     mpPrintMemoryInfo(meshHeaderMemory, "meshHeaderMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
-    MP_LOG_INFO("Largest chunk size: %zu\n", largestChunkSize);
     MP_LOG_INFO("Meshpool consumes: %zu memory\n", core.worldData.chunkCount * sizeof(mpChunk));
 
     core.camera.speed = 10.0f;
@@ -539,8 +552,8 @@ int main(int argc, char *argv[])
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
     core.globalLight.ambient = 0.4f;
-    core.globalLight.position = {100.0f, 100.0f, 100.0f};
-    core.globalLight.colour = {0.9f, 0.9f, 1.0f};
+    core.globalLight.position = {80.0f, 80.0f, 80.0f};
+    core.globalLight.colour = {0.6f, 0.6f, 1.0f};
 
     // TODO: Entity Component System?
     mpEntity player = {};
@@ -561,17 +574,12 @@ int main(int argc, char *argv[])
 
         mpUpdateCameraControlState(core.eventReceiver, &core.camControls);
 
-        // Physics update
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_SPACE)
-            player.force = vec3{0.0f, 0.0f, 5000.0f};
-        mpEntityPhysics(core.worldData, player, timestep);
-
-        // Clamp rotation values
+        // Core :: Clamp rotation values
         if(core.camera.pitch > core.camera.pitchClamp)
             core.camera.pitch = core.camera.pitchClamp;
         else if(core.camera.pitch < -core.camera.pitchClamp)
             core.camera.pitch = -core.camera.pitchClamp;
-        // Update camera rotation values
+        // Core :: Update camera rotation values
         if(core.camControls.flags & MP_KEY_UP)
             core.camera.pitch += core.camera.sensitivity * timestep;
         else if(core.camControls.flags & MP_KEY_DOWN)
@@ -580,7 +588,7 @@ int main(int argc, char *argv[])
             core.camera.yaw += core.camera.sensitivity * timestep;
         else if(core.camControls.flags & MP_KEY_RIGHT)
             core.camera.yaw -= core.camera.sensitivity * timestep;
-        // Get camera vectors
+        // Core :: Get camera vectors
         const float yawCos = cosf(core.camera.yaw);
         const float yawSin = sinf(core.camera.yaw);
         const float pitchCos = cosf(core.camera.pitch);
@@ -588,7 +596,7 @@ int main(int argc, char *argv[])
         const vec3 xyFront = {yawCos, yawSin, 0.0f};
         const vec3 left = {yawSin, -yawCos, 0.0f};
         constexpr vec3 up = {0.0f, 0.0f, 1.0f};
-        // Update player position state
+        // Core :: Update player position state
         if(core.camControls.flags & MP_KEY_W)
             player.position += xyFront * core.camera.speed * timestep;
         else if(core.camControls.flags & MP_KEY_S)
@@ -597,17 +605,23 @@ int main(int argc, char *argv[])
             player.position -= left * core.camera.speed * timestep;
         else if(core.camControls.flags & MP_KEY_D)
             player.position += left * core.camera.speed * timestep;
-        // Update camera matrices
+        // Core :: Update camera matrices
         core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
         core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
-        // Game events : raycasthits
+        // Game events :: Physics update
+        if(core.eventReceiver.keyPressedEvents & MP_KEY_SPACE)
+            player.force = vec3{0.0f, 0.0f, 5000.0f};
+        mpEntityPhysics(core.worldData, player, timestep);
+
+        // Game events :: raycasthits
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
-            mpPaintVoxel(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE, VOXEL_TYPE_MOD_DARK);
+            mpCreateVoxelSphere(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE);
         if(core.eventReceiver.keyPressedEvents & MP_KEY_E)
             mpCreateVoxelBlock(core.worldData, core.camera.position, front, VOXEL_TYPE_STONE);
-        // Recreate mesh for dirty chunks
+
+        // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of chunks needing updating rather than a for loop
         for(uint32_t i = 0; i < core.worldData.chunkCount; i++)
         {
             if(core.worldData.chunks[i].flags & CHUNK_FLAG_DIRTY)
@@ -615,14 +629,14 @@ int main(int argc, char *argv[])
                 core.worldData.chunks[i] = mpSetDrawFlags(core.worldData.chunks[i]);
                 core.renderData.meshes[i] = mpCreateMesh(&core.worldData.chunks[i], core.renderData.meshes[i].memReg, tempMemory, table);
                 core.worldData.chunks[i].flags ^= CHUNK_FLAG_DIRTY;
-                mpVulkanRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
+                mpVkRecreateGeometryBuffer(core.rendererHandle, &core.renderData.meshes[i], i);
                 core.renderFlags |= MP_RENDER_FLAG_REDRAW_MESHES;
             }
         }
-
+        // Renderer :: Render
         mpVulkanUpdate(&core, vulkanMemory, tempMemory);
         mpResetMemoryRegion(tempMemory);
-
+        // Core :: Resets
         core.windowInfo.hasResized = false;
         ResetEventReceiver(&core.eventReceiver);
         MP_PROCESS_PROFILER

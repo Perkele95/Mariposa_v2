@@ -148,9 +148,15 @@ inline vec3& operator-=(vec3 &a, vec3 b)
     return a;
 }
 
+inline float vec3Length(vec3 vec)
+{
+    float result = sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+    return result;
+}
+
 inline vec3 normalise(vec3 vec)
 {
-    float length = sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+    float length = vec3Length(vec);
     vec3 result;
 
     result.x = vec.x / length;

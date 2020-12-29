@@ -4,6 +4,7 @@
 #include <cstring>
 #include "vulkan\vulkan.h"
 #include "mp_maths.h"
+#include "permutation.h"
 #include "events.h"
 
 #define MP_INTERNAL
@@ -68,19 +69,6 @@ struct mpCallbacks
 struct mpThreadContext
 {
     int32_t placeholder;
-};
-
-struct mpVertex
-{
-    vec3 position;
-    vec3 normal;
-    vec4 colour;
-};
-
-struct mpQuadFaceArray
-{
-    vec3 data[4];
-    vec3 normal;
 };
 
 struct mpQuad
@@ -203,4 +191,27 @@ struct mpEntity
     vec3 position, velocity, force;
     float mass, speed;
     uint32_t physState;
+};
+
+struct mpGUI
+{
+    struct vertex
+    {
+        vec2 position;
+        vec4 colour;
+    };
+    struct quad
+    {
+        vertex vertices[4];
+        uint16_t indices[6];
+    };
+};
+
+constexpr mpGUI::quad guiTest = {
+    {
+        {{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{0.5f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+    },  {0, 1, 2, 2, 3, 0}
 };

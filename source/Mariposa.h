@@ -86,7 +86,7 @@ void mpRegisterVoxelType(mpVoxelTypeTable *table, vec4 colour, uint32_t type, ui
     table->colourArray[type][modifier] = colour;
 }
 
-inline vec4 mpGetVoxelColour(mpVoxelTypeTable *table, uint32_t type, uint32_t modifier = VOXEL_TYPE_MOD_DEFAULT)
+inline vec4 mpGetVoxelColour(const mpVoxelTypeTable *table, uint32_t type, uint32_t modifier = VOXEL_TYPE_MOD_DEFAULT)
 {
     return table->colourArray[type][modifier];
 }
