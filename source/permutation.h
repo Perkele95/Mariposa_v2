@@ -8,6 +8,12 @@ struct mpVertex
     vec3 normal;
     vec4 colour;
 };
+struct mpVertexSmaller
+{
+    vec3 position;
+    vec3 normal;
+    uint32_t colour;
+};
 
 struct mpQuadFaceArray
 {

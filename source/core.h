@@ -30,10 +30,9 @@ constexpr uint64_t UINT64MAX = 0xFFFFFFFFFFFFFFFF;
 constexpr float PI32 = 3.14159265359f;
 constexpr float PI32_D = 6.28318530718f;
 
-#define KiloBytes(value) (value * 1024LL)
-#define MegaBytes(value) (value * 1024LL * 1024LL)
-#define GigaBytes(value) (value * 1024LL * 1024LL * 1024LL)
-#define TeraBytes(value) (value * 1024LL * 1024LL * 1024LL * 1024LL)
+constexpr int64_t KiloBytes(const int64_t amount) {return amount * 1024LL;}
+constexpr int64_t MegaBytes(const int64_t amount) {return amount * 1024LL * 1024LL;}
+constexpr int64_t GigaBytes(const int64_t amount) {return amount * 1024LL * 1024LL * 1024LL;}
 
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
 #define arraysize3D(array3D) (sizeof(array3D) / sizeof((array3D)[0][0][0]))
@@ -42,7 +41,7 @@ constexpr int32_t MP_SUBREGION_SIZE = 20;
 constexpr int32_t MP_REGION_SIZE = 10;
 
 constexpr float MP_GRAVITY_CONSTANT = 9.81f;
-constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT};
+constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT * 5};
 
 typedef int32_t bool32;
 typedef void* mpHandle;

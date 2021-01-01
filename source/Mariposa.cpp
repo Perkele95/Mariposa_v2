@@ -408,6 +408,7 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
         return;
 
     constexpr int32_t size = 12;
+    constexpr uint8_t zOffset = size / 2;
     constexpr int32_t start = -(size/2);
     constexpr float radius = static_cast<float>(size / 2);
 
@@ -424,7 +425,10 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                         const vec3Int index = mpVec3ToVec3Int(localHit);
                         mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                         result.flags = MP_VOXEL_FLAG_ACTIVE;
-                        result.colour.rgba = rayCastHit.voxel->colour.rgba;
+                        result.colour.r = static_cast<uint8_t>(z + zOffset) * 20;
+                        result.colour.g = static_cast<uint8_t>(z + zOffset) * 20;
+                        result.colour.b = static_cast<uint8_t>(z + zOffset) * 20;
+                        result.colour.a = rayCastHit.voxel->colour.a;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                     }
                 }
@@ -459,27 +463,41 @@ static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const v
         }
     }
 }
-
+// TODO: optimise
 static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float timestep)
 {
-    // Check for collision
     const mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, entity.position);
-    if(subRegion != nullptr){
-        const vec3 localPosition = entity.position - subRegion->position;
-        const vec3Int index = mpVec3ToVec3Int(localPosition);
-        const bool32 isColliding = subRegion->voxels[index.x][index.y][index.z].flags & MP_VOXEL_FLAG_ACTIVE;
-        if(isColliding){
-            // Collision response
-            entity.force.z += MP_GRAVITY_CONSTANT;
-            entity.velocity.z = 0.2f;
+    const vec3 posEx = vec3{entity.position.x, entity.position.y, entity.position.z - 1.0f};
+    const mpVoxelSubRegion *subRegionEx = mpGetContainintSubRegion(region, posEx);
+    if(subRegion != nullptr && subRegionEx != nullptr){
+        const vec3Int posIndex = mpVec3ToVec3Int(entity.position - subRegion->position);
+        const mpVoxel &voxel = subRegion->voxels[posIndex.x][posIndex.y][posIndex.z];
+
+        const vec3Int posExIndex = mpVec3ToVec3Int(posEx - subRegionEx->position);
+        const mpVoxel &voxelEx = subRegionEx->voxels[posExIndex.x][posExIndex.y][posExIndex.z];
+        // Check collision
+        if(voxelEx.flags & MP_VOXEL_FLAG_ACTIVE){
+            if(voxel.flags & MP_VOXEL_FLAG_ACTIVE){
+                // Entity is inside ground
+                entity.position.z += 0.1f;
+            }
+            else{
+                // Entity is on ground
+            }
+            entity.velocity.z = 0.0f;
+        }
+        else{
+            // Entity is falling
+            const vec3 force = gravityVec3 + entity.force;
+            const vec3 acceleration = force / entity.mass;
+            entity.velocity += acceleration * timestep;
+            entity.position += entity.velocity * timestep;
+            entity.force = vec3{};
         }
     }
-    // F = ma => a = F/m
-    const vec3 force = gravityVec3 + entity.force;
-    const vec3 acceleration = force / entity.mass;
-    entity.velocity += acceleration * timestep;
-    entity.position += entity.velocity * timestep;
-    entity.force = vec3{};
+    else{
+        puts("PHYS ERROR: Entity out of bounds");
+    }
 }
 
 static mpGlobalLight mpSetPointLight(mpVoxelRegion *region, vec3 position, vec4 colour, float ambient)
@@ -543,7 +561,7 @@ int main(int argc, char *argv[])
     core.camera.model = Mat4x4Identity();
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
-    core.globalLight = mpSetPointLight(core.region, {20.0f, 20.0f, 70.0f}, {1.3f, 1.3f, 1.5f, 1.0f}, 0.01f);
+    core.globalLight = mpSetPointLight(core.region, {100.0f, 100.0f, 60.0f}, {1.3f, 1.3f, 1.5f, 1.0f}, 0.01f);
 
     // TODO: Entity Component System?
     mpEntity player = {};
