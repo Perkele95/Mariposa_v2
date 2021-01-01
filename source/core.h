@@ -39,7 +39,7 @@ constexpr float PI32_D = 6.28318530718f;
 #define arraysize3D(array3D) (sizeof(array3D) / sizeof((array3D)[0][0][0]))
 
 constexpr int32_t MP_SUBREGION_SIZE = 20;
-constexpr int32_t MP_REGION_SIZE = 8;
+constexpr int32_t MP_REGION_SIZE = 10;
 
 constexpr float MP_GRAVITY_CONSTANT = 9.81f;
 constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT};
@@ -90,10 +90,18 @@ struct mpMesh
     uint32_t indexCount;
 };
 
+union mpVoxelColour
+{
+    uint32_t rgba;
+    struct
+    {
+        uint8_t r, g, b, a;
+    };
+};
+
 struct mpVoxel
 {
-    mpBitFieldShort type;
-    mpBitFieldShort modifier;
+    mpVoxelColour colour;
     mpBitField flags;
 };
 
@@ -108,7 +116,7 @@ struct mpVoxelRegion
 {
     mpVoxelSubRegion subRegions[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
     mpMesh meshArray[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
-    mpBitField flags;
+    mpBitField reserved;
 };
 
 enum mpSubRegionFlags

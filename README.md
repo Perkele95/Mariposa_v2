@@ -5,14 +5,14 @@ This is a personal project aimed at creating a voxel engine for game development
 
 ## Data-Oriented Design (DOD)
 The project follows a Data-Oriented approach, where I aim for cache-locality, restructured struct to avoid extra unecessary size
-due to struct padding and few if no unecessary abstractions around what is important: _data_. This involves seprating state and 
-logic into different parts of the system, keeping data as POD (Plain Old Data) structs. By going for SoA (Struct of Arrays) rather 
-than AoS (Array of Structs) one can separate "hot" and "cold" data. "Hot" data is fetched very often and therefore it is beneficial 
-to fill the CPU caches with it. SoA gives "hot" data a better cache-locality as more of it fits into the cache-line when the "cold" 
+due to struct padding and few if no unecessary abstractions around what is important: _data_. This involves seprating state and
+logic into different parts of the system, keeping data as POD (Plain Old Data) structs. By going for SoA (Struct of Arrays) rather
+than AoS (Array of Structs) one can separate "hot" and "cold" data. "Hot" data is fetched very often and therefore it is beneficial
+to fill the CPU caches with it. SoA gives "hot" data a better cache-locality as more of it fits into the cache-line when the "cold"
 data is separate.
 
-A popular term in game development these days is ECS (Entity-Component-System). ECS has shown to be very efficient for large amounts 
-of similar data components for game entities/objects. It uses the same approach of grouping data into SoA since the components are 
+A popular term in game development these days is ECS (Entity-Component-System). ECS has shown to be very efficient for large amounts
+of similar data components for game entities/objects. It uses the same approach of grouping data into SoA since the components are
 looped through at least once every frame.
 
 ## Memory Pool
@@ -29,10 +29,8 @@ which allows me to pre-allocate memory, recycle memory as well as get more preci
 * **mpFreeMemoryRegion** releases a given region back to the memory pool and allows another part of the program
 to fetch it with mpGetMemoryRegion.
 
-## Voxel Mesh Creation
-Mariposa constructs individual meshes out of chunk data. Chunk data consists of voxel info for N^3 voxels, where N is the 
-width/height/depth of the chunk. A single draw call is issued per mesh. The engine always detects changes in chunk data 
-to recreate the given chunks. New draw calls are only issued for chunks that have been updated.
-
-At the moment Mariposa generates meshes dynamically by iterating through chunk data. Only visible triangle faces are 
+## Meshing the voxels
+Mariposa constructs sets of voxels in N^3 sized arrays inside a subregion. Each subregion is present in an array inside a
+region. Meshes contain vertex and index data for all voxels inside a single subregion. A single draw call is issued per mesh.
+Changes in subregions causes the mesh to be recreated, then the vulkan buffers are remapped. Only visible triangle faces are
 generated and rendered. In the future I plan on using a permutation table with all 64 unique variations of a voxel.

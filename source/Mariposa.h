@@ -17,43 +17,40 @@ inline mpVoxelSubRegion *mpGetContainintSubRegion(mpVoxelRegion &region, vec3 ta
     mpVoxelSubRegion *result = &region.subRegions[x][y][z];
     return result;
 }
+// TODO: optimise
+inline mpVoxel *mpGetVoxelAtLocation(mpVoxelRegion &region, vec3 target)
+{
+    const int32_t srx = static_cast<int32_t>(target.x) / MP_SUBREGION_SIZE;
+    const int32_t sry = static_cast<int32_t>(target.y) / MP_SUBREGION_SIZE;
+    const int32_t srz = static_cast<int32_t>(target.z) / MP_SUBREGION_SIZE;
+    constexpr uint32_t bounds = arraysize(mpVoxelRegion::subRegions);
 
-// Colour Array
-enum mpVoxelType
-{
-    VOXEL_TYPE_GRASS,
-    VOXEL_TYPE_DIRT,
-    VOXEL_TYPE_STONE,
-    VOXEL_TYPE_WOOD,
-    VOXEL_TYPE_MAX
-};
-enum mpVoxelTypeModifier
-{
-    VOXEL_TYPE_MOD_DEFAULT,
-    VOXEL_TYPE_MOD_DARK,
-    VOXEL_TYPE_MOD_MAX
-};
+    if(srx > bounds || sry > bounds || srz > bounds)
+        return nullptr;
 
-struct mpVoxelTypeTable
-{
-    vec4 colourArray[VOXEL_TYPE_MAX][VOXEL_TYPE_MOD_MAX];
-};
+    mpVoxelSubRegion *subRegion = &region.subRegions[srx][sry][srz];
+    const vec3Int vi = mpVec3ToVec3Int(target - subRegion->position);
 
-mpVoxelTypeTable *mpCreateVoxelTypeTable(void *buffer)
-{
-    mpVoxelTypeTable *list = static_cast<mpVoxelTypeTable*>(buffer);
-    return list;
+    mpVoxel *result = &subRegion->voxels[vi.x][vi.y][vi.z];
+    return result;
 }
 
-void mpRegisterVoxelType(mpVoxelTypeTable *table, vec4 colour, uint32_t type, uint32_t modifier = VOXEL_TYPE_MOD_DEFAULT)
+inline vec4 mpConvertToDenseColour(mpVoxelColour colour)
 {
-    table->colourArray[type][modifier] = colour;
+    vec4 result = {};
+    result.x = static_cast<float>(colour.r) / 255.0f;
+    result.y = static_cast<float>(colour.g) / 255.0f;
+    result.z = static_cast<float>(colour.b) / 255.0f;
+    result.w = static_cast<float>(colour.a) / 255.0f;
+
+    return result;
 }
 
-inline vec4 mpGetVoxelColour(const mpVoxelTypeTable *table, uint32_t type, uint32_t modifier = VOXEL_TYPE_MOD_DEFAULT)
+struct mpRayCastHitInfo
 {
-    return table->colourArray[type][modifier];
-}
+    mpVoxel *voxel;
+    vec3 position;
+};
 
 /*---------
  * ECS

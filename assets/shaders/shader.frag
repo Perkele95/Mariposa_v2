@@ -16,8 +16,10 @@ void main()
 	vec3 lightDirection = normalize(fragGlobalLightPosition - fragPosition);
 
 	float diff = max(dot(normal, lightDirection), 0.0);
-	vec3 diffuse = diff * fragGlobalLightColour;
+	float _distance = length(fragGlobalLightPosition - fragPosition);
+	float attenuation = 1.0 / (1.0 + _distance * 0.07 + _distance * _distance * 0.017);
 
-	vec3 result = fragAmbient + diffuse;
-	outColor = vec4(result, 1.0) * fragColour;
+	vec4 diffuse = diff * vec4(fragGlobalLightColour, 1.0) * attenuation;
+
+	outColor = (fragAmbient + diffuse) * fragColour;
 }

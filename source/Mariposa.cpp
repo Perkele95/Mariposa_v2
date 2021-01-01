@@ -61,7 +61,7 @@ inline static mpQuad mpCreateQuad(const mpQuadFaceArray &quadFace, vec3 offset, 
     return quad;
 }
 // mpCreateMesh resets tempMemory after use.
-static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory, mpVoxelTypeTable *typeTable)
+static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory)
 {
     constexpr float VOXEL_SCALE = 0.5f;
     constexpr uint16_t vertexStride = 4;
@@ -86,7 +86,7 @@ static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion *meshRegi
                 if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
-                const vec4 colour = mpGetVoxelColour(typeTable, voxel.type, voxel.modifier);
+                const vec4 colour = mpConvertToDenseColour(voxel.colour);
                 const vec3 positionOffset = subRegion.position + mpVec3IntToVec3(vec3Int{x, y, z});
 
                 if(voxel.flags & MP_VOXEL_FLAG_DRAW_NORTH){
@@ -179,10 +179,9 @@ static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion *meshRegi
 // TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
 static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
 {
-    constexpr float surfaceLevel = 40.0f;
-    constexpr float granularity = 0.05f;
-    constexpr float moistureFactor = 0.4f;
-    constexpr float heightMult = 7.0f;
+    constexpr float noiseOffset = 40.0f;
+    constexpr float noiseHeight = 8.0f;
+    constexpr float granularity = 0.09f;
     mpVoxelSubRegion subRegion = {};
     subRegion.position = subRegionPosition;
 
@@ -190,13 +189,21 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
         for(int32_t y = 0; y < MP_SUBREGION_SIZE; y++){
             for(int32_t x = 0; x < MP_SUBREGION_SIZE; x++){
                 const vec3 globalPos = subRegionPosition + mpVec3IntToVec3(vec3Int{x, y, z});
-                const float moistureThreshold = perlin(globalPos.x * moistureFactor, globalPos.y * moistureFactor);
-                const float surfaceThreshold = moistureThreshold + surfaceLevel + heightMult * perlin(globalPos.x * granularity, globalPos.y * granularity);
+                const float noise = noiseHeight * perlin(globalPos.x * granularity, globalPos.y * granularity);
+                const float surfaceThreshold = noiseOffset + noise;
+                float moistureLevel = (noiseOffset + noise * 3.5f) * 4.0f;
+                if(moistureLevel > 255.0f)
+                    moistureLevel = 250.0f;
 
                 if(globalPos.z > surfaceThreshold)
                     continue;
-                subRegion.voxels[x][y][z].flags = MP_VOXEL_FLAG_ACTIVE;
-                subRegion.voxels[x][y][z].type = VOXEL_TYPE_GRASS;
+
+                mpVoxel &voxel = subRegion.voxels[x][y][z];
+                voxel.flags = MP_VOXEL_FLAG_ACTIVE;
+                voxel.colour.r = 0x20;
+                voxel.colour.g = static_cast<uint8_t>(moistureLevel);
+                voxel.colour.b = 0x4A;
+                voxel.colour.a = 0xFF;
             }
         }
     }
@@ -261,7 +268,7 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
     }
 }
 
-static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion *regionMemory, mpMemoryPool *meshPool, mpMemoryRegion *tempMemory, mpVoxelTypeTable *typeTable)
+static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion *regionMemory, mpMemoryPool *meshPool, mpMemoryRegion *tempMemory)
 {
     mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAllocateIntoRegion(regionMemory, sizeof(mpVoxelRegion)));
     // Set active flag on voxels
@@ -303,7 +310,7 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion *regionMemory, mpMemory
                 mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
                 // Create mesh
                 mpMemoryRegion *meshRegion = mpGetMemoryRegion(meshPool);
-                region->meshArray[x][y][z] = mpCreateMesh(subRegion, meshRegion, tempMemory, typeTable);
+                region->meshArray[x][y][z] = mpCreateMesh(subRegion, meshRegion, tempMemory);
             }
         }
     }
@@ -371,44 +378,53 @@ static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpC
     }
 }
 
-static vec3 mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
+static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
+    mpRayCastHitInfo hitInfo;
+    memset(&hitInfo, 0, sizeof(mpRayCastHitInfo));
     vec3 rayCastHit = origin + direction;
     for(uint32_t i = 0; i < 20; i++){
         rayCastHit += direction;
 
-        const mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, rayCastHit);
+        mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, rayCastHit);
         if(subRegion != nullptr){
             const vec3 localPos = rayCastHit - subRegion->position;
             vec3Int index = mpVec3ToVec3Int(localPos);
 
-            if(subRegion->voxels[index.x][index.y][index.z].flags & MP_VOXEL_FLAG_ACTIVE)
+            if(subRegion->voxels[index.x][index.y][index.z].flags & MP_VOXEL_FLAG_ACTIVE){
+                hitInfo.position = rayCastHit;
+                hitInfo.voxel = &subRegion->voxels[index.x][index.y][index.z];
                 break;
+            }
         }
     }
-    return rayCastHit;
+    return hitInfo;
 }
 // TODO: optimise
-static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
-    const vec3 rayCastHit = mpRayCast(region, origin, direction);
-    constexpr int32_t size = 8;
+    const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
+    if(rayCastHit.voxel == nullptr)
+        return;
+
+    constexpr int32_t size = 12;
     constexpr int32_t start = -(size/2);
+    constexpr float radius = static_cast<float>(size / 2);
 
     for(int32_t z = start; z < size; z++){
         for(int32_t y = start; y < size; y++){
             for(int32_t x = start; x < size; x++){
-                const vec3 target = rayCastHit + mpVec3IntToVec3(vec3Int{x,y,z});
+                const vec3 target = rayCastHit.position + mpVec3IntToVec3(vec3Int{x,y,z});
                 mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, target);
 
                 if(subRegion != nullptr){
                     const vec3 localHit = target - subRegion->position;
 
-                    if(vec3Length(target - rayCastHit) < 4.0f){
+                    if(vec3Length(target - rayCastHit.position) < radius){
                         const vec3Int index = mpVec3ToVec3Int(localHit);
                         mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                         result.flags = MP_VOXEL_FLAG_ACTIVE;
-                        result.type = type;
+                        result.colour.rgba = rayCastHit.voxel->colour.rgba;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                     }
                 }
@@ -417,15 +433,17 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
     }
 }
 
-static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, mpBitFieldShort type)
+static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
 {
-    vec3 rayCastHit = mpRayCast(region, origin, direction);
-    // Fetch each block around target and set to active
+    const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
+    if(rayCastHit.voxel == nullptr)
+        return;
+
     constexpr int32_t size = 4;
     for(int32_t z = 0; z < size; z++){
         for(int32_t y = 0; y < size; y++){
             for(int32_t x = 0; x < size; x++){
-                const vec3 target = rayCastHit + mpVec3IntToVec3(vec3Int{x,y,z});
+                const vec3 target = rayCastHit.position + mpVec3IntToVec3(vec3Int{x,y,z});
                 mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, target);
 
                 if(subRegion != nullptr){
@@ -434,7 +452,7 @@ static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const v
 
                     mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                     result.flags = MP_VOXEL_FLAG_ACTIVE;
-                    result.type = type;
+                    result.colour.rgba = rgba;
                     subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                 }
             }
@@ -464,6 +482,24 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
     entity.force = vec3{};
 }
 
+static mpGlobalLight mpSetPointLight(mpVoxelRegion *region, vec3 position, vec4 colour, float ambient)
+{
+    mpGlobalLight lamp = {};
+    lamp.position = position;
+    lamp.ambient = ambient;
+    lamp.colour = {colour.x, colour.y, colour.z};
+
+    mpVoxel *voxel = mpGetVoxelAtLocation(*region, position);
+    if(voxel != nullptr)
+    {
+        voxel->flags |= MP_VOXEL_FLAG_ACTIVE;
+        voxel->colour.rgba = 0xFFFFFFFF;
+        mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(*region, position);
+        subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
+    }
+    return lamp;
+}
+
 inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
 {
     MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000)
@@ -487,19 +523,9 @@ int main(int argc, char *argv[])
     mpMemoryRegion *staticMemory = mpGetMemoryRegion(&smallPool);
     mpMemoryRegion *tempMemory = mpGetMemoryRegion(&subRegionPool);
 
-    mpVoxelTypeTable *typeTable = mpCreateVoxelTypeTable(
-        mpAllocateIntoRegion(staticMemory, sizeof(mpVoxelTypeTable))
-    );
-    mpRegisterVoxelType(typeTable, {0.1f, 0.3f, 0.15f, 1.0f}, VOXEL_TYPE_GRASS);
-    mpRegisterVoxelType(typeTable, {0.3f, 0.2f, 0.2f, 1.0f}, VOXEL_TYPE_DIRT);
-    mpRegisterVoxelType(typeTable, {1.0f, 1.0f, 1.0f, 1.0f}, VOXEL_TYPE_STONE);
-    mpRegisterVoxelType(typeTable, {0.1f, 0.1f, 0.1f, 1.0f}, VOXEL_TYPE_STONE, VOXEL_TYPE_MOD_DARK);
-    mpRegisterVoxelType(typeTable, {0.3f, 0.1f, 0.1f, 1.0f}, VOXEL_TYPE_WOOD);
-    mpRegisterVoxelType(typeTable, {0.0f, 0.2f, 0.0f, 1.0f}, VOXEL_TYPE_GRASS, VOXEL_TYPE_MOD_DARK);
-
     constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
     mpMemoryPool meshPool = mpCreateMemoryPool(subRegionCount, MegaBytes(1), 42);
-    core.region = mpGenerateWorldData(subRegionMemory, &meshPool, tempMemory, typeTable);
+    core.region = mpGenerateWorldData(subRegionMemory, &meshPool, tempMemory);
 
     core.guiData = mpCreateGuiData(staticMemory, core.windowInfo.width, core.windowInfo.height);
 
@@ -517,9 +543,7 @@ int main(int argc, char *argv[])
     core.camera.model = Mat4x4Identity();
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
-    core.globalLight.ambient = 0.4f;
-    core.globalLight.position = {80.0f, 80.0f, 80.0f};
-    core.globalLight.colour = {0.6f, 0.6f, 1.0f};
+    core.globalLight = mpSetPointLight(core.region, {20.0f, 20.0f, 70.0f}, {1.3f, 1.3f, 1.5f, 1.0f}, 0.01f);
 
     // TODO: Entity Component System?
     mpEntity player = {};
@@ -583,9 +607,9 @@ int main(int argc, char *argv[])
 
         // Game events :: raycasthits
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
-            mpCreateVoxelSphere(*core.region, core.camera.position, front, VOXEL_TYPE_STONE);
+            mpCreateVoxelSphere(*core.region, core.camera.position, front);
         if(core.eventReceiver.keyPressedEvents & MP_KEY_E)
-            mpCreateVoxelBlock(*core.region, core.camera.position, front, VOXEL_TYPE_STONE);
+            mpCreateVoxelBlock(*core.region, core.camera.position, front, 0xFFFFFFFF);
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of chunks needing updating rather than a for loop
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){
@@ -596,7 +620,7 @@ int main(int argc, char *argv[])
                         mpSetDrawFlags(subRegion, core.region, vec3Int{x, y, z});
 
                         mpMesh &mesh = core.region->meshArray[x][y][z];
-                        mesh = mpCreateMesh(subRegion, mesh.memReg, tempMemory, typeTable);
+                        mesh = mpCreateMesh(subRegion, mesh.memReg, tempMemory);
                         subRegion.flags &= ~MP_SUBREG_FLAG_DIRTY;
                         constexpr uint32_t regionSize2x = MP_REGION_SIZE * MP_REGION_SIZE;
                         mpVkRecreateGeometryBuffer(core.rendererHandle, mesh, vec3Int{x, y, z});

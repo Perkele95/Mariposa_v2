@@ -24,16 +24,21 @@ struct SwapChainSupportDetails
     uint32_t formatCount;
     uint32_t presentModeCount;
 };
-
+// Aligned according to vulkan specs
 struct UniformbufferObject
 {
     alignas(16) mat4x4 Model;
     alignas(16) mat4x4 View;
     alignas(16) mat4x4 Proj;
 
-	vec3 position;
-	vec3 colour;
-	float ambient;
+	alignas(16) vec3 position;
+	alignas(16) vec3 colour;
+	alignas(4) float ambient;
+};
+
+struct LightUBO
+{
+
 };
 
 struct mpVkRenderer
@@ -1253,7 +1258,7 @@ inline static void beginRender(VkCommandBuffer &commandBuffer, VkRenderPass &ren
     mp_assert(!error);
 
     VkClearValue colorValue = {};
-    colorValue.color = {0.2f, 0.5f, 1.0f, 1.0f};
+    colorValue.color = {0.01f, 0.01f, 0.01f, 1.0f};
     VkClearValue depthStencilValue = {};
     depthStencilValue.depthStencil = { 1.0f, 0 };
 
