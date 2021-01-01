@@ -400,6 +400,35 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
     }
     return hitInfo;
 }
+
+static void mpSpawnTree(mpVoxelRegion *region, const vec3 origin)
+{
+    constexpr int32_t size = 6;
+    constexpr float radius = size/2;
+    constexpr int32_t start = -(size/2);
+    for(int32_t layer = start; layer < 25; layer++){
+        for(int32_t y = start; y < size; y++){
+            for(int32_t x = start; x < size; x++){
+                const vec3 target = origin + mpVec3IntToVec3(vec3Int{x, y, layer});
+                mpVoxelQueryInfo info = mpQueryVoxelLocation(*region, target);
+                if(info.voxel != nullptr){
+                    const vec3 distanceCalc = {origin.x, origin.y, target.z};
+                    const float distance = vec3Length(target - distanceCalc);
+                    if(distance > radius)
+                        continue;
+
+                    info.voxel->flags = MP_VOXEL_FLAG_ACTIVE;
+                    info.voxel->colour.r = x & 1 ? 0x25 : 0x2A;
+                    info.voxel->colour.g = y & 1 ? 0x10 : 0x13;
+                    info.voxel->colour.b = 0x10;
+                    info.voxel->colour.a = 0xFF;
+                    info.subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
+                }
+            }
+        }
+    }
+}
+
 // TODO: optimise
 static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
@@ -426,8 +455,8 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                         mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                         result.flags = MP_VOXEL_FLAG_ACTIVE;
                         result.colour.r = static_cast<uint8_t>(z + zOffset) * 20;
-                        result.colour.g = static_cast<uint8_t>(z + zOffset) * 20;
-                        result.colour.b = static_cast<uint8_t>(z + zOffset) * 20;
+                        result.colour.g = static_cast<uint8_t>(z + zOffset) * 12;
+                        result.colour.b = static_cast<uint8_t>(z + zOffset) * 5;
                         result.colour.a = rayCastHit.voxel->colour.a;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                     }
@@ -437,7 +466,7 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
     }
 }
 
-static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
+inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
 {
     const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
     if(rayCastHit.voxel == nullptr)
@@ -500,24 +529,6 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
     }
 }
 
-static mpGlobalLight mpSetPointLight(mpVoxelRegion *region, vec3 position, vec4 colour, float ambient)
-{
-    mpGlobalLight lamp = {};
-    lamp.position = position;
-    lamp.ambient = ambient;
-    lamp.colour = {colour.x, colour.y, colour.z};
-
-    mpVoxel *voxel = mpGetVoxelAtLocation(*region, position);
-    if(voxel != nullptr)
-    {
-        voxel->flags |= MP_VOXEL_FLAG_ACTIVE;
-        voxel->colour.rgba = 0xFFFFFFFF;
-        mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(*region, position);
-        subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
-    }
-    return lamp;
-}
-
 inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
 {
     MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000)
@@ -561,7 +572,12 @@ int main(int argc, char *argv[])
     core.camera.model = Mat4x4Identity();
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
-    core.globalLight = mpSetPointLight(core.region, {100.0f, 100.0f, 60.0f}, {1.3f, 1.3f, 1.5f, 1.0f}, 0.01f);
+    core.pointLight.position = {100.0f, 100.0f, 60.0f};
+    core.pointLight.constant = 1.0f;
+    core.pointLight.linear = 0.07f;
+    core.pointLight.quadratic = 0.017f;
+    core.pointLight.diffuse = {2.0f, 1.3f, 1.0f};
+    core.pointLight.ambient = 0.12f;
 
     // TODO: Entity Component System?
     mpEntity player = {};
@@ -626,8 +642,11 @@ int main(int argc, char *argv[])
         // Game events :: raycasthits
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
             mpCreateVoxelSphere(*core.region, core.camera.position, front);
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_E)
-            mpCreateVoxelBlock(*core.region, core.camera.position, front, 0xFFFFFFFF);
+        if(core.eventReceiver.keyPressedEvents & MP_KEY_E){
+            mpRayCastHitInfo hitInfo = mpRayCast(*core.region, core.camera.position, front);
+            if(hitInfo.voxel != nullptr)
+                mpSpawnTree(core.region, hitInfo.position);
+        }
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of chunks needing updating rather than a for loop
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){

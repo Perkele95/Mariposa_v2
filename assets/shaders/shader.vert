@@ -8,7 +8,10 @@ layout(binding = 0) uniform UniformbufferObject
 	mat4 Proj;
 
 	vec3 position;
-	vec3 colour;
+	vec3 diffuse;
+	float constant;
+	float linear;
+	float quadratic;
 	float ambient;
 } ubo;
 
@@ -19,9 +22,13 @@ layout(location = 2) in vec4 inColour;
 layout(location = 0) out vec3 fragPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec4 fragColour;
-layout(location = 3) out vec3 fragGlobalLightPosition;
-layout(location = 4) out vec3 fragGlobalLightColour;
-layout(location = 5) out float fragAmbient;
+// Light
+layout(location = 3) out vec3 fragLightPosition;
+layout(location = 4) out vec3 fragLightDiffuse;
+layout(location = 5) out float fragLightConstant;
+layout(location = 6) out float fragLightLinear;
+layout(location = 7) out float fragLightQuadratic;
+layout(location = 8) out float fragLightAmbient;
 
 void main()
 {
@@ -29,7 +36,11 @@ void main()
 	fragPosition = inPosition;
 	fragNormal = inNormal;
 	fragColour = inColour;
-	fragGlobalLightPosition = ubo.position;
-	fragGlobalLightColour = ubo.colour;
-    fragAmbient = ubo.ambient;
+
+	fragLightPosition = ubo.position;
+	fragLightDiffuse = ubo.diffuse;
+	fragLightConstant = ubo.constant;
+	fragLightLinear = ubo.linear;
+	fragLightQuadratic = ubo.quadratic;
+	fragLightAmbient = ubo.ambient;
 }

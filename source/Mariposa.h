@@ -17,22 +17,31 @@ inline mpVoxelSubRegion *mpGetContainintSubRegion(mpVoxelRegion &region, vec3 ta
     mpVoxelSubRegion *result = &region.subRegions[x][y][z];
     return result;
 }
-// TODO: optimise
-inline mpVoxel *mpGetVoxelAtLocation(mpVoxelRegion &region, vec3 target)
+
+struct mpVoxelQueryInfo
+{
+    mpVoxel *voxel;
+    mpVoxelSubRegion *subRegion;
+};
+// TODO: Handle edge case when outside bounds
+inline mpVoxelQueryInfo mpQueryVoxelLocation(mpVoxelRegion &region, vec3 target)
 {
     const int32_t srx = static_cast<int32_t>(target.x) / MP_SUBREGION_SIZE;
     const int32_t sry = static_cast<int32_t>(target.y) / MP_SUBREGION_SIZE;
     const int32_t srz = static_cast<int32_t>(target.z) / MP_SUBREGION_SIZE;
     constexpr uint32_t bounds = arraysize(mpVoxelRegion::subRegions);
 
-    if(srx > bounds || sry > bounds || srz > bounds)
-        return nullptr;
+    //if(srx > bounds || sry > bounds || srz > bounds)
+        // Error, outside bounds
 
     mpVoxelSubRegion *subRegion = &region.subRegions[srx][sry][srz];
     const vec3Int vi = mpVec3ToVec3Int(target - subRegion->position);
 
-    mpVoxel *result = &subRegion->voxels[vi.x][vi.y][vi.z];
-    return result;
+    mpVoxelQueryInfo queryInfo = {};
+    queryInfo.subRegion = subRegion;
+    queryInfo.voxel = &subRegion->voxels[vi.x][vi.y][vi.z];
+
+    return queryInfo;
 }
 
 inline vec4 mpConvertToDenseColour(mpVoxelColour colour)

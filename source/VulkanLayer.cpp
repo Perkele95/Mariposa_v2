@@ -32,7 +32,10 @@ struct UniformbufferObject
     alignas(16) mat4x4 Proj;
 
 	alignas(16) vec3 position;
-	alignas(16) vec3 colour;
+	alignas(16) vec3 diffuse;
+	alignas(4) float constant;
+	alignas(4) float linear;
+	alignas(4) float quadratic;
 	alignas(4) float ambient;
 };
 
@@ -1258,7 +1261,7 @@ inline static void beginRender(VkCommandBuffer &commandBuffer, VkRenderPass &ren
     mp_assert(!error);
 
     VkClearValue colorValue = {};
-    colorValue.color = {0.01f, 0.01f, 0.01f, 1.0f};
+    colorValue.color = {0.2f, 0.4f, 0.8f, 1.0f};
     VkClearValue depthStencilValue = {};
     depthStencilValue.depthStencil = { 1.0f, 0 };
 
@@ -1426,14 +1429,17 @@ static void RecreateSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t h
     PrepareVkCommandbuffers(renderer, tempMemory);
 }
 
-inline static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpGlobalLight *gLight, uint32_t imageIndex)
+inline static void UpdateUBOs(mpVkRenderer *renderer, const mpCamera *camera, const mpPointLight *light, uint32_t imageIndex)
 {
     renderer->ubo.Model = camera->model;
     renderer->ubo.View = camera->view;
     renderer->ubo.Proj = camera->projection;
-    renderer->ubo.ambient = gLight->ambient;
-    renderer->ubo.position = gLight->position;
-    renderer->ubo.colour = gLight->colour;
+    renderer->ubo.position = light->position;
+    renderer->ubo.constant = light->constant;
+    renderer->ubo.linear = light->linear;
+    renderer->ubo.quadratic = light->quadratic;
+    renderer->ubo.diffuse = light->diffuse;
+    renderer->ubo.ambient = light->ambient;
 
     void *data;
     constexpr size_t dataSize = sizeof(UniformbufferObject);
@@ -1470,7 +1476,7 @@ void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *
         puts("Failed to acquire swap chain image!");
     }
 
-    UpdateUBOs(renderer, &core->camera, &core->globalLight, imageIndex);
+    UpdateUBOs(renderer, &core->camera, &core->pointLight, imageIndex);
 
     if(renderer->pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(renderer->device, 1, &renderer->pInFlightImageFences[imageIndex], VK_TRUE, UINT64MAX);

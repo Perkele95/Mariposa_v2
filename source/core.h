@@ -159,10 +159,15 @@ struct mpCameraControls
     mpBitField flags;
 };
 
-struct mpGlobalLight
+struct mpPointLight
 {
     vec3 position;
-    vec3 colour;
+
+    float constant;
+    float linear;
+    float quadratic;
+
+    vec3 diffuse;
     float ambient;
 };
 
@@ -181,7 +186,7 @@ struct mpCore
     mpVoxelRegion *region;
     mpGUI::renderData guiData;
 
-    mpGlobalLight globalLight;
+    mpPointLight pointLight;
 };
 
 struct mpEntity
