@@ -324,6 +324,39 @@ inline vec4 normalise(vec4 vec)
     return result;
 }
 
+struct vec3Int
+{
+    int32_t x, y, z;
+};
+
+inline vec3Int operator+(vec3Int a, vec3Int b)
+{
+    vec3Int result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    return result;
+}
+
+inline vec3Int mpVec3ToVec3Int(vec3 a)
+{
+    vec3Int result = {
+        static_cast<int32_t>(a.x),
+        static_cast<int32_t>(a.y),
+        static_cast<int32_t>(a.z)
+    };
+    return result;
+}
+
+inline vec3 mpVec3IntToVec3(vec3Int a)
+{
+    vec3 result = {
+        static_cast<float>(a.x),
+        static_cast<float>(a.y),
+        static_cast<float>(a.z)
+    };
+    return result;
+}
 
 // ---------------------
 // 4x4 Matrix
@@ -552,18 +585,6 @@ inline float mapNoise(vec3 position)
 
     return result;
 }
-
-// ------
-// Map/grid related stuff
-struct grid32
-{
-    int32_t x,y,z;
-};
-
-struct gridU32
-{
-    uint32_t x, y, z;
-};
 
 inline uint32_t uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
 {

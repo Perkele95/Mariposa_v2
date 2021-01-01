@@ -36,8 +36,11 @@ constexpr float PI32_D = 6.28318530718f;
 #define TeraBytes(value) (value * 1024LL * 1024LL * 1024LL * 1024LL)
 
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
+#define arraysize3D(array3D) (sizeof(array3D) / sizeof((array3D)[0][0][0]))
 
-constexpr uint32_t MP_CHUNK_SIZE = 20;
+constexpr int32_t MP_SUBREGION_SIZE = 20;
+constexpr int32_t MP_REGION_SIZE = 8;
+
 constexpr float MP_GRAVITY_CONSTANT = 9.81f;
 constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT};
 
@@ -69,7 +72,7 @@ struct mpCallbacks
 
 struct mpThreadContext
 {
-    int32_t placeholder;
+    int32_t ID;
 };
 
 struct mpQuad
@@ -87,23 +90,6 @@ struct mpMesh
     uint32_t indexCount;
 };
 
-struct mpRenderData
-{
-    mpMesh *meshes;
-    uint32_t meshCount;
-};
-
-enum mpVoxelFlags
-{
-    VOXEL_FLAG_ACTIVE      = 0x00000001,
-    VOXEL_FLAG_DRAW_TOP    = 0x00000002,
-    VOXEL_FLAG_DRAW_BOTTOM = 0x00000004,
-    VOXEL_FLAG_DRAW_NORTH  = 0x00000008,
-    VOXEL_FLAG_DRAW_SOUTH  = 0x00000010,
-    VOXEL_FLAG_DRAW_EAST   = 0x00000020,
-    VOXEL_FLAG_DRAW_WEST   = 0x00000040,
-};
-
 struct mpVoxel
 {
     mpBitFieldShort type;
@@ -111,37 +97,47 @@ struct mpVoxel
     mpBitField flags;
 };
 
-enum mpChunkFlags
+struct mpVoxelSubRegion
 {
-    CHUNK_FLAG_IS_EMPTY         = 0x0001,
-    CHUNK_FLAG_NEIGHBOUR_NORTH  = 0x0002,
-    CHUNK_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
-    CHUNK_FLAG_NEIGHBOUR_TOP    = 0x0008,
-    CHUNK_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
-    CHUNK_FLAG_NEIGHBOUR_EAST   = 0x0020,
-    CHUNK_FLAG_NEIGHBOUR_WEST   = 0x0040,
-    CHUNK_FLAG_DIRTY         = 0x0080,
-};
-
-struct mpChunk
-{
-    mpVoxel voxels[MP_CHUNK_SIZE][MP_CHUNK_SIZE][MP_CHUNK_SIZE];
+    mpVoxel voxels[MP_SUBREGION_SIZE][MP_SUBREGION_SIZE][MP_SUBREGION_SIZE];
     vec3 position;
-
     mpBitField flags;
-    mpChunk *northNeighbour;
-    mpChunk *southNeighbour;
-    mpChunk *topNeighbour;
-    mpChunk *bottomNeighbour;
-    mpChunk *eastNeighbour;
-    mpChunk *westNeighbour;
 };
 
-struct mpWorldData
+struct mpVoxelRegion
 {
-    mpChunk *chunks;
-    uint32_t chunkCount;
-    gridU32 bounds;
+    mpVoxelSubRegion subRegions[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
+    mpMesh meshArray[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
+    mpBitField flags;
+};
+
+enum mpSubRegionFlags
+{
+    MP_SUBREG_FLAG_EMPTY            = 0x0001,
+    MP_SUBREG_FLAG_NEIGHBOUR_NORTH  = 0x0002,
+    MP_SUBREG_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
+    MP_SUBREG_FLAG_NEIGHBOUR_TOP    = 0x0008,
+    MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
+    MP_SUBREG_FLAG_NEIGHBOUR_EAST   = 0x0020,
+    MP_SUBREG_FLAG_NEIGHBOUR_WEST   = 0x0040,
+    MP_SUBREG_FLAG_DIRTY            = 0x0080,
+};
+
+enum mpVoxelFlags
+{
+    MP_VOXEL_FLAG_ACTIVE      = 0x00000001,
+    MP_VOXEL_FLAG_DRAW_TOP    = 0x00000002,
+    MP_VOXEL_FLAG_DRAW_BOTTOM = 0x00000004,
+    MP_VOXEL_FLAG_DRAW_NORTH  = 0x00000008,
+    MP_VOXEL_FLAG_DRAW_SOUTH  = 0x00000010,
+    MP_VOXEL_FLAG_DRAW_EAST   = 0x00000020,
+    MP_VOXEL_FLAG_DRAW_WEST   = 0x00000040,
+};
+
+enum mpRenderFlags
+{
+    MP_RENDER_FLAG_REDRAW_REQUIRED        = 0x0001,
+    MP_RENDER_FLAG_ENABLE_VK_VALIDATION   = 0x0002,
 };
 
 struct mpCamera
@@ -154,12 +150,6 @@ struct mpCamera
 struct mpCameraControls
 {
     mpBitField flags;
-};
-
-enum mpRenderFlags
-{
-    MP_RENDER_FLAG_REDRAW_REQUIRED        = 0x0001,
-    MP_RENDER_FLAG_ENABLE_VK_VALIDATION = 0x0002,
 };
 
 struct mpGlobalLight
@@ -181,8 +171,7 @@ struct mpCore
     mpCamera camera;
     mpCameraControls camControls;
 
-    mpWorldData worldData;
-    mpRenderData renderData;
+    mpVoxelRegion *region;
     mpGUI::renderData guiData;
 
     mpGlobalLight globalLight;

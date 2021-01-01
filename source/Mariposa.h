@@ -4,54 +4,18 @@
 
 // Helpers
 
-inline grid32 mpVec3ToGrid32(vec3 a)
+inline mpVoxelSubRegion *mpGetContainintSubRegion(mpVoxelRegion &region, vec3 target)
 {
-    grid32 result = {
-        static_cast<int32_t>(a.x),
-        static_cast<int32_t>(a.y),
-        static_cast<int32_t>(a.z)
-    };
-    return result;
-}
-inline vec3 mpGrid32ToVec3(grid32 a)
-{
-    vec3 result = {
-        static_cast<float>(a.x),
-        static_cast<float>(a.y),
-        static_cast<float>(a.z)
-    };
-    return result;
-}
-inline gridU32 mpVec3ToGridU32(vec3 a)
-{
-    gridU32 result = {
-        static_cast<uint32_t>(a.x),
-        static_cast<uint32_t>(a.y),
-        static_cast<uint32_t>(a.z)
-    };
-    return result;
-}
-inline vec3 mpGridU32ToVec3(gridU32 a)
-{
-    vec3 result = {
-        static_cast<float>(a.x),
-        static_cast<float>(a.y),
-        static_cast<float>(a.z)
-    };
-    return result;
-}
+    const int32_t x = static_cast<int32_t>(target.x) / MP_SUBREGION_SIZE;
+    const int32_t y = static_cast<int32_t>(target.y) / MP_SUBREGION_SIZE;
+    const int32_t z = static_cast<int32_t>(target.z) / MP_SUBREGION_SIZE;
+    constexpr uint32_t bounds = arraysize(mpVoxelRegion::subRegions);
 
-static mpChunk* mpGetContainingChunk(const mpWorldData &worldData, vec3 position)
-{
-    const grid32 gIndex = mpVec3ToGrid32(position);
-    const uint32_t chunkIndexX = gIndex.x / MP_CHUNK_SIZE;
-    const uint32_t chunkIndexY = gIndex.y / MP_CHUNK_SIZE;
-    const uint32_t chunkIndexZ = gIndex.z / MP_CHUNK_SIZE;
-
-    if(chunkIndexX > worldData.bounds.x || chunkIndexY > worldData.bounds.y || chunkIndexZ > worldData.bounds.z)
+    if(x > bounds || y > bounds || z > bounds)
         return nullptr;
-    const uint32_t index = chunkIndexX + worldData.bounds.x * (chunkIndexY + chunkIndexZ * worldData.bounds.y);
-    return &worldData.chunks[index];
+
+    mpVoxelSubRegion *result = &region.subRegions[x][y][z];
+    return result;
 }
 
 // Colour Array
@@ -75,7 +39,7 @@ struct mpVoxelTypeTable
     vec4 colourArray[VOXEL_TYPE_MAX][VOXEL_TYPE_MOD_MAX];
 };
 
-mpVoxelTypeTable* mpCreateVoxelTypeTable(void *buffer)
+mpVoxelTypeTable *mpCreateVoxelTypeTable(void *buffer)
 {
     mpVoxelTypeTable *list = static_cast<mpVoxelTypeTable*>(buffer);
     return list;

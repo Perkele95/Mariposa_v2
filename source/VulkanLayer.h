@@ -8,6 +8,6 @@
 
 void mpVulkanInit(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory, bool32 enableValidation);
 void mpVulkanUpdate(mpCore *core, mpMemoryRegion *vulkanMemory, mpMemoryRegion *tempMemory);
-void mpVulkanCleanup(mpHandle *rendererHandle, uint32_t meshCount);
+void mpVulkanCleanup(mpHandle *rendererHandle);
 
-void mpVkRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh *mesh, uint32_t index);
+void mpVkRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh &mesh, const vec3Int index);
