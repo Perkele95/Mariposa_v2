@@ -61,7 +61,7 @@ inline static mpQuad mpCreateQuad(const mpQuadFaceArray &quadFace, vec3 offset, 
     return quad;
 }
 // mpCreateMesh resets tempMemory after use.
-static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion *meshRegion, mpMemoryRegion *tempMemory)
+static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion meshRegion, mpMemoryRegion tempMemory)
 {
     constexpr float VOXEL_SCALE = 0.5f;
     constexpr uint16_t vertexStride = 4;
@@ -181,7 +181,7 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
 {
     constexpr float noiseOffset = 40.0f;
     constexpr float noiseHeight = 8.0f;
-    constexpr float granularity = 0.09f;
+    constexpr float granularity = 0.06f;
     mpVoxelSubRegion subRegion = {};
     subRegion.position = subRegionPosition;
 
@@ -268,7 +268,7 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
     }
 }
 
-static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion *regionMemory, mpMemoryPool *meshPool, mpMemoryRegion *tempMemory)
+static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryPool *meshPool, mpMemoryRegion tempMemory)
 {
     mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAllocateIntoRegion(regionMemory, sizeof(mpVoxelRegion)));
     // Set active flag on voxels
@@ -309,65 +309,21 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion *regionMemory, mpMemory
                 mpVoxelSubRegion &subRegion = region->subRegions[x][y][z];
                 mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
                 // Create mesh
-                mpMemoryRegion *meshRegion = mpGetMemoryRegion(meshPool);
+                mpMemoryRegion meshRegion = mpGetMemoryRegion(meshPool);
                 region->meshArray[x][y][z] = mpCreateMesh(subRegion, meshRegion, tempMemory);
             }
         }
     }
     return region;
 }
-
-static mpGUI::renderData mpCreateGuiData(mpMemoryRegion *staticMemory, uint32_t screenWidth, uint32_t screenHeight)
-{
-    constexpr size_t vertexSize = sizeof(mpGUI::vertex);
-    constexpr size_t indexSize = sizeof(uint16_t);
-    // Create list of gui elements
-    // Format: { topLeft, bottomRight }
-    #if 0
-    constexpr mpGUI::rect2D rect2DList[] = {
-        {{100, 100}, {500, 200}},
-        {{100, 250}, {500, 350}},
-        {{100, 400}, {500, 500}},
-    };
-    #else
-    constexpr mpGUI::rect2D rect2DList[] = {
-        {}
-    };
-    #endif
-    constexpr uint32_t rect2DListCount = arraysize(rect2DList);
-    constexpr uint32_t quadVertexCount = arraysize(mpGUI::quad::vertices);
-    constexpr uint32_t quadIndexCount = arraysize(mpGUI::quad::indices);
-
-    constexpr size_t vertexStride = sizeof(mpGUI::vertex) * quadVertexCount;
-    constexpr size_t vertexAllocSize = vertexStride * rect2DListCount;
-    constexpr size_t indexStride = sizeof(uint16_t) * quadIndexCount;
-    constexpr size_t indexAllocSize = indexStride * rect2DListCount;
-    // Allocate necessary data
-    mpGUI::renderData result = {};
-    result.vertices = static_cast<mpGUI::vertex*>(mpAllocateIntoRegion(staticMemory, vertexAllocSize));
-    result.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(staticMemory, indexAllocSize));
-    result.vertexCount = rect2DListCount * quadVertexCount;
-    result.indexCount = rect2DListCount * quadIndexCount;
-    // Merge gui elements into big data block
-    for(uint32_t rect = 0; rect < rect2DListCount; rect++)
-    {
-        mpGUI::quad newQuad = mpGUI::quadFromRect(rect2DList[rect], {1.0f, 1.0f, 1.0f, 0.2f}, {screenWidth, screenHeight});
-        for(uint32_t i = 0; i < quadIndexCount; i++)
-            newQuad.indices[i] += static_cast<uint16_t>(quadVertexCount * rect);
-
-        memcpy(result.vertices + quadVertexCount * rect, newQuad.vertices, vertexStride);
-        memcpy(result.indices + quadIndexCount * rect, newQuad.indices, indexStride);
-    }
-    return result;
-}
-
+//TODO: make this into a generic continuous key event thing instead of camera only
 static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpCameraControls *cameraControls)
 {
     constexpr mpKeyEvent keyList[] = {
         MP_KEY_UP, MP_KEY_DOWN,
         MP_KEY_LEFT, MP_KEY_RIGHT,
         MP_KEY_W, MP_KEY_S,
-        MP_KEY_A, MP_KEY_D,
+        MP_KEY_A, MP_KEY_D, MP_KEY_E
     };
     constexpr uint32_t listSize = arraysize(keyList);
     for(uint32_t key = 0; key < listSize; key++){
@@ -425,6 +381,21 @@ static void mpSpawnTree(mpVoxelRegion *region, const vec3 origin)
                     info.subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                 }
             }
+        }
+    }
+}
+
+inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegion *region, const vec3 origin), const int32_t zIndex)
+{
+    // TODO: replace rand()
+    for(int32_t y = 0; y < MP_REGION_SIZE; y += 2){
+        for(int32_t x = 0; x < MP_REGION_SIZE; x += 2){
+            const mpVoxelSubRegion &subRegion = region->subRegions[x][y][zIndex];
+            const vec3 centre = subRegion.position + vec3{MP_SUBREGION_SIZE/2, MP_SUBREGION_SIZE/2, 0.0f};
+            const float angle = static_cast<float>(rand());
+            constexpr float length = MP_SUBREGION_SIZE/3;
+            const vec3 direction = {cosf(angle) * length, sinf(angle) * length, 0.0f};
+            spawn(region, centre + direction);
         }
     }
 }
@@ -492,12 +463,13 @@ inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, 
         }
     }
 }
-// TODO: optimise
+// TODO: optimise TODO: Jumping
 static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float timestep)
 {
     const mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, entity.position);
     const vec3 posEx = vec3{entity.position.x, entity.position.y, entity.position.z - 1.0f};
     const mpVoxelSubRegion *subRegionEx = mpGetContainintSubRegion(region, posEx);
+
     if(subRegion != nullptr && subRegionEx != nullptr){
         const vec3Int posIndex = mpVec3ToVec3Int(entity.position - subRegion->position);
         const mpVoxel &voxel = subRegion->voxels[posIndex.x][posIndex.y][posIndex.z];
@@ -529,7 +501,7 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
     }
 }
 
-inline static void mpPrintMemoryInfo(mpMemoryRegion *region, const char *name)
+inline static void mpPrintMemoryInfo(mpMemoryRegion region, const char *name)
 {
     MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000)
 }
@@ -548,18 +520,20 @@ int main(int argc, char *argv[])
     mpMemoryPool subRegionPool = mpCreateMemoryPool(2, MegaBytes(70), 1);
     mpMemoryPool smallPool = mpCreateMemoryPool(6, MegaBytes(1), 2);
 
-    mpMemoryRegion *subRegionMemory = mpGetMemoryRegion(&subRegionPool);
-    mpMemoryRegion *staticMemory = mpGetMemoryRegion(&smallPool);
-    mpMemoryRegion *tempMemory = mpGetMemoryRegion(&subRegionPool);
+    mpMemoryRegion subRegionMemory = mpGetMemoryRegion(&subRegionPool);
+    mpMemoryRegion staticMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion tempMemory = mpGetMemoryRegion(&subRegionPool);
 
     constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
     mpMemoryPool meshPool = mpCreateMemoryPool(subRegionCount, MegaBytes(1), 42);
     core.region = mpGenerateWorldData(subRegionMemory, &meshPool, tempMemory);
 
-    core.guiData = mpCreateGuiData(staticMemory, core.windowInfo.width, core.windowInfo.height);
+    core.gui = mpInitialiseGUI(12, 20);
 
-    mpMemoryRegion *vulkanMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
+
+    mpDistribute(core.region, mpSpawnTree, 2);
 
     mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
     mpPrintMemoryInfo(staticMemory, "staticMemory");
@@ -594,9 +568,24 @@ int main(int argc, char *argv[])
     core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
     {
+        // Core :: evenets
         PlatformPollEvents(&core.eventReceiver);
-
         mpUpdateCameraControlState(core.eventReceiver, &core.camControls);
+        // Core :: gamestate switch
+        if(core.eventReceiver.keyPressedEvents & MP_KEY_ESCAPE){
+            if(core.gameState == MP_GAMESTATE_ACTIVE)
+                core.gameState = MP_GAMESTATE_PAUSED;
+            else if(core.gameState == MP_GAMESTATE_PAUSED)
+                core.gameState = MP_GAMESTATE_ACTIVE;
+        }
+        // CORE :: GUI :: Begin
+        mpGUIReset(core.gui, mpPoint{core.windowInfo.width, core.windowInfo.height});
+
+        constexpr mpRect2D rect = {{100, 100}, {500, 200}};
+        if(core.gameState == MP_GAMESTATE_PAUSED)
+            mpDrawRect2D(core.gui, rect, {1.0f, 1.0f, 1.0f, 0.8f});
+        // Core :: GUI :: End
+        mpVkRecreateGUIBuffers(core.rendererHandle, core.gui.data);
 
         // Core :: Clamp rotation values
         if(core.camera.pitch > core.camera.pitchClamp)
@@ -635,18 +624,11 @@ int main(int argc, char *argv[])
         core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
 
         // Game events :: Physics update
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_SPACE)
-            player.force = vec3{0.0f, 0.0f, 5000.0f};
         mpEntityPhysics(*core.region, player, timestep);
 
         // Game events :: raycasthits
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
             mpCreateVoxelSphere(*core.region, core.camera.position, front);
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_E){
-            mpRayCastHitInfo hitInfo = mpRayCast(*core.region, core.camera.position, front);
-            if(hitInfo.voxel != nullptr)
-                mpSpawnTree(core.region, hitInfo.position);
-        }
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of chunks needing updating rather than a for loop
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){
@@ -661,7 +643,6 @@ int main(int argc, char *argv[])
                         subRegion.flags &= ~MP_SUBREG_FLAG_DIRTY;
                         constexpr uint32_t regionSize2x = MP_REGION_SIZE * MP_REGION_SIZE;
                         mpVkRecreateGeometryBuffer(core.rendererHandle, mesh, vec3Int{x, y, z});
-                        core.renderFlags |= MP_RENDER_FLAG_REDRAW_REQUIRED;
                     }
                 }
             }
@@ -675,9 +656,8 @@ int main(int argc, char *argv[])
         MP_PROCESS_PROFILER
         timestep = PlatformUpdateClock();
     }
-
+    // General :: cleanup
     mpVulkanCleanup(&core.rendererHandle);
-
     mpDestroyMemoryPool(&meshPool);
     mpDestroyMemoryPool(&smallPool);
     mpDestroyMemoryPool(&subRegionPool);

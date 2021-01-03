@@ -6,7 +6,6 @@
 #include "mp_maths.h"
 #include "permutation.h"
 #include "events.h"
-#include "mpGui.h"
 
 #define MP_INTERNAL
 //#define MP_PERFORMANCE
@@ -25,10 +24,12 @@
 #include "memory.h"
 #include "logger.h"
 #include "profiler.h"
+#include "mpGui.h"
 
 constexpr uint64_t UINT64MAX = 0xFFFFFFFFFFFFFFFF;
 constexpr float PI32 = 3.14159265359f;
 constexpr float PI32_D = 6.28318530718f;
+constexpr float SQRT2 = 1.41421356237f;
 
 constexpr int64_t KiloBytes(const int64_t amount) {return amount * 1024LL;}
 constexpr int64_t MegaBytes(const int64_t amount) {return amount * 1024LL * 1024LL;}
@@ -69,6 +70,7 @@ struct mpCallbacks
     bool32 (*mpWriteFile)(const char *filename, mpFile *file);
 };
 
+typedef void (*mpThreadProc)(void*);
 struct mpThreadContext
 {
     int32_t ID;
@@ -84,7 +86,7 @@ struct mpMesh
 {
     mpVertex *vertices;
     uint16_t *indices;
-    mpMemoryRegion *memReg;
+    mpMemoryRegion memReg;
     uint32_t vertexCount;
     uint32_t indexCount;
 };
@@ -143,8 +145,9 @@ enum mpVoxelFlags
 
 enum mpRenderFlags
 {
-    MP_RENDER_FLAG_REDRAW_REQUIRED        = 0x0001,
-    MP_RENDER_FLAG_ENABLE_VK_VALIDATION   = 0x0002,
+    MP_RENDER_FLAG_ENABLE_VK_VALIDATION = 0x0001,
+    MP_RENDER_FLAG_RESERVED             = 0x0002,
+    MP_RENDER_FLAG_GUI_UPDATED          = 0x0004,
 };
 
 struct mpCamera
@@ -171,22 +174,30 @@ struct mpPointLight
     float ambient;
 };
 
+enum mpGameState
+{
+    MP_GAMESTATE_ACTIVE,
+    MP_GAMESTATE_PAUSED,
+    MP_GAMESTATE_MAINMENU,
+    MP_GAMESTATE_QUIT,
+};
+
 struct mpCore
 {
     const char *name;
-    mpHandle rendererHandle;
-    mpBitField renderFlags;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
     mpEventReceiver eventReceiver;
+    mpBitField gameState;
 
     mpCamera camera;
     mpCameraControls camControls;
 
+    mpHandle rendererHandle;
+    mpBitField renderFlags;
     mpVoxelRegion *region;
-    mpGUI::renderData guiData;
-
     mpPointLight pointLight;
+    mpGUI gui;
 };
 
 struct mpEntity
