@@ -116,60 +116,50 @@ struct mpVkRenderer
     UniformbufferObject ubo;
 };
 
-static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checkedPhysDevice)
+static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checkedPhysDevice, mpMemoryRegion tempMemory)
 {
     QueueFamilyIndices indices = {};
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, nullptr);
-    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount));
+    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkQueueFamilyProperties) * queueFamilyCount));
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, queueFamilyProperties);
 
-    for(uint32_t i = 0; i < queueFamilyCount; i++)
-    {
-        if(queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-        {
+    for(uint32_t i = 0; i < queueFamilyCount; i++){
+        if(queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT){
             indices.graphicsFamily.value = i;
             indices.graphicsFamily.hasValue = true;
         }
 
         VkBool32 presentSupport = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(*checkedPhysDevice, i, renderer->surface, &presentSupport);
-        if(presentSupport)
-        {
+        if(presentSupport){
             indices.presentFamily.value = i;
             indices.presentFamily.hasValue = true;
         }
 
-        if(indices.graphicsFamily.hasValue && indices.presentFamily.hasValue)
-        {
+        if(indices.graphicsFamily.hasValue && indices.presentFamily.hasValue){
             indices.isComplete = true;
             break;
         }
     }
-    free(queueFamilyProperties);
 
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, nullptr);
-    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(malloc(sizeof(VkExtensionProperties) * extensionCount));
+    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkExtensionProperties) * extensionCount));
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, availableExtensions);
 
     bool32 extensionsSupported = false;
-    for(uint32_t i = 0; i < arraysize(deviceExtensions); i++)
-    {
-        for(uint32_t k = 0; k < extensionCount; k++)
-        {
-            if(strcmp(deviceExtensions[i], availableExtensions[k].extensionName) == 0)
-            {
+    for(uint32_t i = 0; i < arraysize(deviceExtensions); i++){
+        for(uint32_t k = 0; k < extensionCount; k++){
+            if(strcmp(deviceExtensions[i], availableExtensions[k].extensionName) == 0){
                 extensionsSupported = true;
                 break;
             }
         }
     }
-    free(availableExtensions);
 
     bool32 swapChainAdequate = false;
-    if(extensionsSupported)
-    {
+    if(extensionsSupported){
         VkSurfaceCapabilitiesKHR capabilities = {};
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*checkedPhysDevice, renderer->surface, &capabilities);
         uint32_t formatCount = 0, presentModeCount = 0;
@@ -190,13 +180,11 @@ static VkFormat FindSupportedDepthFormat(VkPhysicalDevice physDevice)
     VkFormatFeatureFlags features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
     VkFormat result = VK_FORMAT_UNDEFINED;
 
-    for(uint32_t i = 0; i < arraysize(formats); i++)
-    {
+    for(uint32_t i = 0; i < arraysize(formats); i++){
         VkFormatProperties props = {};
         vkGetPhysicalDeviceFormatProperties(physDevice, formats[i], &props);
 
-        if((props.optimalTilingFeatures & features) == features)
-        {
+        if((props.optimalTilingFeatures & features) == features){
             result = formats[i];
             break;
         }
@@ -205,26 +193,22 @@ static VkFormat FindSupportedDepthFormat(VkPhysicalDevice physDevice)
     return result;
 }
 
-static void PrepareGpu(mpVkRenderer *renderer)
+static void PrepareGpu(mpVkRenderer *renderer, mpMemoryRegion tempMemory)
 {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, nullptr);
     if(deviceCount == 0)
         puts("Failed to find GPUs with Vulkan Support");
 
-    VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(malloc(sizeof(VkPhysicalDevice) * deviceCount));
+    VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(mpAllocateIntoRegion(tempMemory, sizeof(VkPhysicalDevice) * deviceCount));
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, devices);
 
-    for(uint32_t i = 0; i < deviceCount; i++)
-    {
-        if(IsDeviceSuitable(renderer, &devices[i]))
-        {
+    for(uint32_t i = 0; i < deviceCount; i++){
+        if(IsDeviceSuitable(renderer, &devices[i], tempMemory)){
             renderer->gpu = devices[i];
             break;
         }
     }
-    free(devices);
-
     renderer->depthFormat = FindSupportedDepthFormat(renderer->gpu);
 
     if(renderer->gpu == VK_NULL_HANDLE)
@@ -237,21 +221,18 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     uint32_t uniqueQueueFamilies[2] = {};
     uint32_t queueCount = 0;
 
-    if(renderer->indices.graphicsFamily.value == renderer->indices.presentFamily.value)
-    {
+    if(renderer->indices.graphicsFamily.value == renderer->indices.presentFamily.value){
         uniqueQueueFamilies[0] = renderer->indices.graphicsFamily.value;
         queueCount = 1;
     }
-    else
-    {
+    else{
         uniqueQueueFamilies[0] = renderer->indices.graphicsFamily.value;
         uniqueQueueFamilies[1] = renderer->indices.presentFamily.value;
         queueCount = 2;
     }
 
     float queuePriority = 1.0f;
-    for(uint32_t i = 0; i < queueCount; i++)
-    {
+    for(uint32_t i = 0; i < queueCount; i++){
         queueCreateInfos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfos[i].queueFamilyIndex = uniqueQueueFamilies[i];
         queueCreateInfos[i].queueCount = queueCount;
@@ -268,8 +249,7 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     createInfo.enabledExtensionCount = arraysize(deviceExtensions);
     createInfo.ppEnabledExtensionNames = deviceExtensions;
 
-    if(enableValidation)
-    {
+    if(enableValidation){
         createInfo.enabledLayerCount = arraysize(validationLayers);
         createInfo.ppEnabledLayerNames = validationLayers;
     }
@@ -281,7 +261,7 @@ static void PrepareDevice(mpVkRenderer *renderer, bool32 enableValidation)
     vkGetDeviceQueue(renderer->device, renderer->indices.presentFamily.value, 0, &renderer->presentQueue);
 }
 
-static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, const mpCallbacks *const callbacks)
+static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, const mpCallbacks *const callbacks, mpMemoryRegion tempMemory)
 {
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -295,15 +275,14 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceInfo.pApplicationInfo = &appInfo;
 
-    if(enableValidation)
-    {
+    if(enableValidation){
         instanceInfo.enabledLayerCount = arraysize(validationLayers);
         instanceInfo.ppEnabledLayerNames = validationLayers;
     }
 
     uint32_t extensionsCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, nullptr);
-    VkExtensionProperties* extensionProperties = static_cast<VkExtensionProperties*>(malloc(sizeof(VkExtensionProperties) * extensionsCount));
+    VkExtensionProperties* extensionProperties = static_cast<VkExtensionProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkExtensionProperties) * extensionsCount));
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, extensionProperties);
 
     char* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
@@ -311,19 +290,16 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     instanceInfo.enabledExtensionCount = arraysize(extensions);
     instanceInfo.ppEnabledExtensionNames = extensions;
 
-    for(uint32_t i = 0; i < extensionsCount; i++)
-    {
+    for(uint32_t i = 0; i < extensionsCount; i++){
         MP_LOG_INFO("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
     }
-
-    free(extensionProperties);
 
     VkResult error = vkCreateInstance(&instanceInfo, 0, &renderer->instance);
     mp_assert(!error);
 
     callbacks->GetSurface(renderer->instance, &renderer->surface);
 
-    PrepareGpu(renderer);
+    PrepareGpu(renderer, tempMemory);
     PrepareDevice(renderer, enableValidation);
 
     // Prepare Descriptor set layouts
@@ -404,8 +380,7 @@ inline VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresent
         VK_PRESENT_MODE_FIFO_KHR        == Vsync ON, double buffering
         VK_PRESENT_MODE_MAILBOX_KHR     == Vsync ON, triple buffering
     */
-    for(uint32_t i = 0; i < presentModeCount; i++)
-    {
+    for(uint32_t i = 0; i < presentModeCount; i++){
         if(availablePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
             return availablePresentModes[i];
     }
@@ -415,12 +390,10 @@ inline VkPresentModeKHR ChooseSwapPresentMode(VkPresentModeKHR *availablePresent
 
 inline VkExtent2D ChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, int32_t windowWidth, int32_t windowHeight)
 {
-    if(capabilities.currentExtent.width != 0xFFFFFFFF)
-    {
+    if(capabilities.currentExtent.width != 0xFFFFFFFF){
         return capabilities.currentExtent;
     }
-    else
-    {
+    else{
         VkExtent2D actualExtent = { static_cast<uint32_t>(windowWidth), static_cast<uint32_t>(windowHeight) };
 
         actualExtent.width = Uint32Clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
@@ -435,15 +408,13 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion vulkanRegi
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.capabilities);
 
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
-    if(renderer->swapDetails.formatCount > 0)
-    {
+    if(renderer->swapDetails.formatCount > 0){
         renderer->swapDetails.pFormats = static_cast<VkSurfaceFormatKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
     }
 
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
-    if(renderer->swapDetails.presentModeCount > 0)
-    {
+    if(renderer->swapDetails.presentModeCount > 0){
         renderer->swapDetails.pPresentModes = static_cast<VkPresentModeKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
     }
@@ -470,14 +441,12 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion vulkanRegi
 
     uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily.value, renderer->indices.presentFamily.value };
 
-    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value)
-    {
+    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value){
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
         createInfo.pQueueFamilyIndices = queueFamilyIndices;
     }
-    else
-    {
+    else{
         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         createInfo.queueFamilyIndexCount = 0;
         createInfo.pQueueFamilyIndices = nullptr;
@@ -539,14 +508,12 @@ static void RebuildSwapChain(mpVkRenderer *renderer, uint32_t width, uint32_t he
 
     uint32_t queueFamilyIndices[] = { renderer->indices.graphicsFamily.value, renderer->indices.presentFamily.value };
 
-    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value)
-    {
+    if(renderer->indices.graphicsFamily.value != renderer->indices.presentFamily.value){
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
         createInfo.pQueueFamilyIndices = queueFamilyIndices;
     }
-    else
-    {
+    else{
         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         createInfo.queueFamilyIndexCount = 0;
         createInfo.pQueueFamilyIndices = nullptr;
@@ -1153,8 +1120,7 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, mpMemoryRegion tempM
     error = vkAllocateDescriptorSets(renderer->device, &descriptorSetAllocInfo, renderer->pDescriptorSets);
     mp_assert(!error);
 
-    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
-    {
+    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++){
         VkDescriptorBufferInfo bufferInfo = {};
         bufferInfo.buffer = renderer->pUniformbuffers[i];
         bufferInfo.offset = 0;
@@ -1191,8 +1157,7 @@ static void PrepareVkSyncObjects(mpVkRenderer *renderer)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    for(uint32_t i = 0; i < MP_MAX_IMAGES_IN_FLIGHT; i++)
-    {
+    for(uint32_t i = 0; i < MP_MAX_IMAGES_IN_FLIGHT; i++){
         VkResult error = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &renderer->imageAvailableSemaphores[i]);
         mp_assert(!error);
         error = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &renderer->renderFinishedSemaphores[i]);
@@ -1268,8 +1233,7 @@ inline static void drawIndexed(VkCommandBuffer commandbuffer, VkBuffer *vertexbu
 inline static void DrawImages(mpVkRenderer &renderer, const mpVoxelRegion *region, const mpGuiData &guiData)
 {
     vkDeviceWaitIdle(renderer.device);
-    for(uint32_t image = 0; image < renderer.swapChainImageCount; image++)
-    {
+    for(uint32_t image = 0; image < renderer.swapChainImageCount; image++){
         VkCommandBuffer &commandBuffer = renderer.pCommandbuffers[image];
         beginRender(commandBuffer, renderer.renderPass, renderer.pFramebuffers[image], renderer.swapChainExtent);
 
@@ -1297,7 +1261,7 @@ void mpVulkanInit(mpCore *core, mpMemoryRegion vulkanMemory, mpMemoryRegion temp
     if(enableValidation && !CheckValidationLayerSupport(vulkanMemory))
         puts("WARNING: Validation layers requested, but not available\n");
 
-    PrepareVkRenderer(renderer, enableValidation, &core->callbacks);
+    PrepareVkRenderer(renderer, enableValidation, &core->callbacks, tempMemory);
     PrepareVkSwapChain(renderer, vulkanMemory, core->windowInfo.width, core->windowInfo.height);
 
     PrepareVkRenderPass(renderer);
@@ -1315,7 +1279,6 @@ void mpVulkanInit(mpCore *core, mpMemoryRegion vulkanMemory, mpMemoryRegion temp
     PrepareDepthResources(renderer);
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, core->region);
-    //PrepareVkGUIbuffer(renderer, core->gui.data);
     PrepareVkCommandbuffers(renderer, tempMemory);
     PrepareVkSyncObjects(renderer);
 }
@@ -1406,8 +1369,7 @@ static void CleanupSwapChain(mpVkRenderer *renderer)
     vkDestroyPipelineLayout(renderer->device, renderer->gui.pipelineLayout, nullptr);
     vkDestroyRenderPass(renderer->device, renderer->renderPass, nullptr);
 
-    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
-    {
+    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++){
         vkDestroyImageView(renderer->device, renderer->pSwapChainImageViews[i], nullptr);
         vkDestroyBuffer(renderer->device, renderer->pUniformbuffers[i], nullptr);
         vkFreeMemory(renderer->device, renderer->pUniformbufferMemories[i], nullptr);

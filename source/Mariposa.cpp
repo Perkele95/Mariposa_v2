@@ -512,6 +512,7 @@ int main(int argc, char *argv[])
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
     core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION;
+    core.gameState = MP_GAMESTATE_ACTIVE;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
@@ -579,15 +580,14 @@ int main(int argc, char *argv[])
                 core.gameState = MP_GAMESTATE_ACTIVE;
         }
         // CORE :: GUI
-        // TODO: mpgui begin info instead of this mess
         const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
         const mpPoint mousePos = {core.eventReceiver.mouseX, core.eventReceiver.mouseY};
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            mpDrawAdjustedRect2D(core.gui, 25, 25, {0.2f, 0.2f, 0.2f, 0.7f});
+            mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f});
             if(mpButton(core.gui, 1, {400, 400})){
-                // pause menu button clicked
+                // -> pause menu button clicked
             }
         }
 
