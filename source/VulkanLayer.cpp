@@ -1,5 +1,5 @@
 #include "VulkanLayer.h"
-#include "C:\Users\arlev\Documents\GitHub\Mariposa_v2\1.2.162.0\Include\vulkan\vulkan.h"
+#include "vulkan\vulkan.h"
 #include <stdio.h>
 
 constexpr char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};

@@ -1,7 +1,7 @@
 # Mariposa
  // Mariposa :: v2 //
 This is a personal project aimed at creating a voxel engine for game development using Vulkan for hardware acceleration.
-*Many thanks to Casey Muratori and his Handmade Hero project, I could not have done it without him.*
+*Many thanks to Casey Muratori and his Handmade Hero project*
 
 ## Data-Oriented Design (DOD)
 The project follows a Data-Oriented approach, where I aim for cache-locality, restructured struct to avoid extra unecessary size

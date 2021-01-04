@@ -357,7 +357,7 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
     return hitInfo;
 }
 
-static void mpSpawnTree(mpVoxelRegion *region, const vec3 origin)
+inline static void mpSpawnTree(mpVoxelRegion *region, const vec3 origin)
 {
     constexpr int32_t size = 6;
     constexpr float radius = size/2;
@@ -400,6 +400,16 @@ inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegi
     }
 }
 
+static uint32_t s_colourKey = 0;
+constexpr uint32_t colourTable[] = {
+    0xDDDD00FF,
+    0xDDFFDDFF,
+    0xFFDDDDFF,
+    0xDD55DDFF,
+    0x5555DDFF,
+    0xDDDD55FF,
+    0xDD5555FF,
+};
 // TODO: optimise
 static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
@@ -425,16 +435,20 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                         const vec3Int index = mpVec3ToVec3Int(localHit);
                         mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                         result.flags = MP_VOXEL_FLAG_ACTIVE;
-                        result.colour.r = static_cast<uint8_t>(z + zOffset) * 20;
-                        result.colour.g = static_cast<uint8_t>(z + zOffset) * 12;
-                        result.colour.b = static_cast<uint8_t>(z + zOffset) * 5;
-                        result.colour.a = rayCastHit.voxel->colour.a;
+                        result.colour.rgba = colourTable[s_colourKey];
+                        result.colour.r -= static_cast<uint8_t>(z + zOffset) * 3;
+                        result.colour.g -= static_cast<uint8_t>(z + zOffset) * 3;
+                        result.colour.b -= static_cast<uint8_t>(z + zOffset) * 3;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                     }
                 }
             }
         }
-    }
+    }// temporary colour selection
+    if(s_colourKey == 6)
+        s_colourKey = 0;
+    else
+        s_colourKey++;
 }
 
 inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
@@ -534,7 +548,7 @@ int main(int argc, char *argv[])
     mpMemoryRegion vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
 
-    mpDistribute(core.region, mpSpawnTree, 2);
+    //mpDistribute(core.region, mpSpawnTree, 2);
 
     mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
     mpPrintMemoryInfo(staticMemory, "staticMemory");
@@ -588,6 +602,7 @@ int main(int argc, char *argv[])
             mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f});
             if(mpButton(core.gui, 1, {400, 400})){
                 // -> pause menu button clicked
+                // Doesn't seem to be working yet
             }
         }
 
@@ -637,7 +652,7 @@ int main(int argc, char *argv[])
         if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
             mpCreateVoxelSphere(*core.region, core.camera.position, front);
 
-        // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of chunks needing updating rather than a for loop
+        // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of subRegions needing updating rather than a for loop
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){
             for(int32_t y = 0; y < MP_REGION_SIZE; y++){
                 for(int32_t x = 0; x < MP_REGION_SIZE; x++){
