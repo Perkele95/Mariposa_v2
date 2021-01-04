@@ -316,8 +316,8 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryP
     }
     return region;
 }
-//TODO: make this into a generic continuous key event thing instead of camera only
-static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpCameraControls *cameraControls)
+
+static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &eventReceiver)
 {
     constexpr mpKeyEvent keyList[] = {
         MP_KEY_UP, MP_KEY_DOWN,
@@ -328,9 +328,9 @@ static void mpUpdateCameraControlState(const mpEventReceiver &eventReceiver, mpC
     constexpr uint32_t listSize = arraysize(keyList);
     for(uint32_t key = 0; key < listSize; key++){
         if(eventReceiver.keyPressedEvents & keyList[key])
-            cameraControls->flags |= keyList[key];
+            core.continuousEvents |= keyList[key];
         else if(eventReceiver.keyReleasedEvents & keyList[key])
-            cameraControls->flags &= ~keyList[key];
+            core.continuousEvents &= ~keyList[key];
     }
 }
 
@@ -528,7 +528,7 @@ int main(int argc, char *argv[])
     mpMemoryPool meshPool = mpCreateMemoryPool(subRegionCount, MegaBytes(1), 42);
     core.region = mpGenerateWorldData(subRegionMemory, &meshPool, tempMemory);
 
-    core.gui = mpInitialiseGUI(12, 20);
+    core.gui = mpGuiInitialise(12, 20);
 
     mpMemoryRegion vulkanMemory = mpGetMemoryRegion(&smallPool);
     mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
@@ -570,7 +570,7 @@ int main(int argc, char *argv[])
     {
         // Core :: evenets
         PlatformPollEvents(&core.eventReceiver);
-        mpUpdateCameraControlState(core.eventReceiver, &core.camControls);
+        mpUpdateContinuousControls(core, core.eventReceiver);
         // Core :: gamestate switch
         if(core.eventReceiver.keyPressedEvents & MP_KEY_ESCAPE){
             if(core.gameState == MP_GAMESTATE_ACTIVE)
@@ -578,13 +578,20 @@ int main(int argc, char *argv[])
             else if(core.gameState == MP_GAMESTATE_PAUSED)
                 core.gameState = MP_GAMESTATE_ACTIVE;
         }
-        // CORE :: GUI :: Begin
-        mpGUIReset(core.gui, mpPoint{core.windowInfo.width, core.windowInfo.height});
+        // CORE :: GUI
+        // TODO: mpgui begin info instead of this mess
+        const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
+        const mpPoint mousePos = {core.eventReceiver.mouseX, core.eventReceiver.mouseY};
+        mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
-        constexpr mpRect2D rect = {{100, 100}, {500, 200}};
-        if(core.gameState == MP_GAMESTATE_PAUSED)
-            mpDrawRect2D(core.gui, rect, {1.0f, 1.0f, 1.0f, 0.8f});
-        // Core :: GUI :: End
+        if(core.gameState == MP_GAMESTATE_PAUSED){
+            mpDrawAdjustedRect2D(core.gui, 25, 25, {0.2f, 0.2f, 0.2f, 0.7f});
+            if(mpButton(core.gui, 1, {400, 400})){
+                // pause menu button clicked
+            }
+        }
+
+        mpGuiEnd(core.gui);
         mpVkRecreateGUIBuffers(core.rendererHandle, core.gui.data);
 
         // Core :: Clamp rotation values
@@ -593,13 +600,13 @@ int main(int argc, char *argv[])
         else if(core.camera.pitch < -core.camera.pitchClamp)
             core.camera.pitch = -core.camera.pitchClamp;
         // Core :: Update camera rotation values
-        if(core.camControls.flags & MP_KEY_UP)
+        if(core.continuousEvents & MP_KEY_UP)
             core.camera.pitch += core.camera.sensitivity * timestep;
-        else if(core.camControls.flags & MP_KEY_DOWN)
+        else if(core.continuousEvents & MP_KEY_DOWN)
             core.camera.pitch -= core.camera.sensitivity * timestep;
-        if(core.camControls.flags & MP_KEY_LEFT)
+        if(core.continuousEvents & MP_KEY_LEFT)
             core.camera.yaw += core.camera.sensitivity * timestep;
-        else if(core.camControls.flags & MP_KEY_RIGHT)
+        else if(core.continuousEvents & MP_KEY_RIGHT)
             core.camera.yaw -= core.camera.sensitivity * timestep;
         // Core :: Get camera vectors
         const float yawCos = cosf(core.camera.yaw);
@@ -610,13 +617,13 @@ int main(int argc, char *argv[])
         const vec3 left = {yawSin, -yawCos, 0.0f};
         constexpr vec3 up = {0.0f, 0.0f, 1.0f};
         // Core :: Update player position state
-        if(core.camControls.flags & MP_KEY_W)
+        if(core.continuousEvents & MP_KEY_W)
             player.position += xyFront * core.camera.speed * timestep;
-        else if(core.camControls.flags & MP_KEY_S)
+        else if(core.continuousEvents & MP_KEY_S)
             player.position -= xyFront * core.camera.speed * timestep;
-        if(core.camControls.flags & MP_KEY_A)
+        if(core.continuousEvents & MP_KEY_A)
             player.position -= left * core.camera.speed * timestep;
-        else if(core.camControls.flags & MP_KEY_D)
+        else if(core.continuousEvents & MP_KEY_D)
             player.position += left * core.camera.speed * timestep;
         // Core :: Update camera matrices
         core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};

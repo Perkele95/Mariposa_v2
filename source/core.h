@@ -157,11 +157,6 @@ struct mpCamera
     float pitch, yaw, pitchClamp, fov, speed, sensitivity;
 };
 
-struct mpCameraControls
-{
-    mpBitField flags;
-};
-
 struct mpPointLight
 {
     vec3 position;
@@ -191,7 +186,7 @@ struct mpCore
     mpBitField gameState;
 
     mpCamera camera;
-    mpCameraControls camControls;
+    mpBitField continuousEvents;
 
     mpHandle rendererHandle;
     mpBitField renderFlags;
