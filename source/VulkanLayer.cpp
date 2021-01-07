@@ -1,5 +1,7 @@
 #include "VulkanLayer.h"
 #include "vulkan\vulkan.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #include <stdio.h>
 
 constexpr char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
@@ -78,6 +80,8 @@ struct mpVkRenderer
     {
         VkPipeline pipeline;
         VkPipelineLayout pipelineLayout;
+        VkDescriptorSet *pDescriptorSets;
+        VkDescriptorSetLayout descriptorSetLayout;
 
         VkShaderModule vertShaderModule;
         VkShaderModule fragShaderModule;
@@ -86,6 +90,11 @@ struct mpVkRenderer
         VkDeviceMemory vertexbufferMemory;
         VkBuffer indexbuffer;
         VkDeviceMemory indexbufferMemory;
+
+        VkImage textureImage;
+        VkDeviceMemory textureImageMemory;
+        VkImageView textureImageView;
+        VkSampler textureSampler;
     } gui;
 
     VkFramebuffer *pFramebuffers;
@@ -121,7 +130,7 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
     QueueFamilyIndices indices = {};
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, nullptr);
-    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkQueueFamilyProperties) * queueFamilyCount));
+    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(mpAlloc(tempMemory, sizeof(VkQueueFamilyProperties) * queueFamilyCount));
     vkGetPhysicalDeviceQueueFamilyProperties(*checkedPhysDevice, &queueFamilyCount, queueFamilyProperties);
 
     for(uint32_t i = 0; i < queueFamilyCount; i++){
@@ -145,7 +154,7 @@ static bool32 IsDeviceSuitable(mpVkRenderer *renderer, VkPhysicalDevice *checked
 
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, nullptr);
-    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkExtensionProperties) * extensionCount));
+    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(mpAlloc(tempMemory, sizeof(VkExtensionProperties) * extensionCount));
     vkEnumerateDeviceExtensionProperties(*checkedPhysDevice, nullptr, &extensionCount, availableExtensions);
 
     bool32 extensionsSupported = false;
@@ -200,7 +209,7 @@ static void PrepareGpu(mpVkRenderer *renderer, mpMemoryRegion tempMemory)
     if(deviceCount == 0)
         puts("Failed to find GPUs with Vulkan Support");
 
-    VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(mpAllocateIntoRegion(tempMemory, sizeof(VkPhysicalDevice) * deviceCount));
+    VkPhysicalDevice* devices = static_cast<VkPhysicalDevice*>(mpAlloc(tempMemory, sizeof(VkPhysicalDevice) * deviceCount));
     vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, devices);
 
     for(uint32_t i = 0; i < deviceCount; i++){
@@ -282,7 +291,7 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
 
     uint32_t extensionsCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, nullptr);
-    VkExtensionProperties* extensionProperties = static_cast<VkExtensionProperties*>(mpAllocateIntoRegion(tempMemory, sizeof(VkExtensionProperties) * extensionsCount));
+    VkExtensionProperties* extensionProperties = static_cast<VkExtensionProperties*>(mpAlloc(tempMemory, sizeof(VkExtensionProperties) * extensionsCount));
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, extensionProperties);
 
     char* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
@@ -316,6 +325,18 @@ static void PrepareVkRenderer(mpVkRenderer *renderer, bool32 enableValidation, c
     layoutInfo.pBindings = &uboLayoutBinding;
 
     error = vkCreateDescriptorSetLayout(renderer->device, &layoutInfo, nullptr, &renderer->descriptorSetLayout);
+    mp_assert(!error);
+
+    VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+    samplerLayoutBinding.binding = 0;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+    layoutInfo.pBindings = &samplerLayoutBinding;
+
+    error = vkCreateDescriptorSetLayout(renderer->device, &layoutInfo, nullptr, &renderer->gui.descriptorSetLayout);
     mp_assert(!error);
 
     // Prepare command pool
@@ -409,13 +430,13 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion vulkanRegi
 
     vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, nullptr);
     if(renderer->swapDetails.formatCount > 0){
-        renderer->swapDetails.pFormats = static_cast<VkSurfaceFormatKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
+        renderer->swapDetails.pFormats = static_cast<VkSurfaceFormatKHR*>(mpAlloc(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.formatCount));
         vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.formatCount, renderer->swapDetails.pFormats);
     }
 
     vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, nullptr);
     if(renderer->swapDetails.presentModeCount > 0){
-        renderer->swapDetails.pPresentModes = static_cast<VkPresentModeKHR*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
+        renderer->swapDetails.pPresentModes = static_cast<VkPresentModeKHR*>(mpAlloc(vulkanRegion, sizeof(VkSurfaceFormatKHR) * renderer->swapDetails.presentModeCount));
         vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->gpu, renderer->surface, &renderer->swapDetails.presentModeCount, renderer->swapDetails.pPresentModes);
     }
 
@@ -462,14 +483,14 @@ static void PrepareVkSwapChain(mpVkRenderer *renderer, mpMemoryRegion vulkanRegi
     mp_assert(!error)
 
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, nullptr);
-    renderer->pSwapChainImages = static_cast<VkImage*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * imageCount));
+    renderer->pSwapChainImages = static_cast<VkImage*>(mpAlloc(vulkanRegion, sizeof(VkImageView) * imageCount));
     vkGetSwapchainImagesKHR(renderer->device, renderer->swapChain, &imageCount, renderer->pSwapChainImages);
 
     renderer->swapChainImageCount = imageCount;
     renderer->swapChainImageFormat = surfaceFormat.format;
     renderer->swapChainExtent = extent;
 
-    renderer->pSwapChainImageViews = static_cast<VkImageView*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkImageView) * renderer->swapChainImageCount));
+    renderer->pSwapChainImageViews = static_cast<VkImageView*>(mpAlloc(vulkanRegion, sizeof(VkImageView) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         renderer->pSwapChainImageViews[i] = CreateImageView(renderer->device, renderer->pSwapChainImages[i], renderer->swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 }
@@ -795,7 +816,7 @@ static void PrepareVkGuiPipeline(mpVkRenderer *renderer)
     bindingDescription.stride = sizeof(mpGuiVertex);
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    VkVertexInputAttributeDescription attributeDescs[2] = {};
+    VkVertexInputAttributeDescription attributeDescs[3] = {};
     attributeDescs[0].binding = 0;
     attributeDescs[0].location = 0;
     attributeDescs[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -803,8 +824,13 @@ static void PrepareVkGuiPipeline(mpVkRenderer *renderer)
 
     attributeDescs[1].binding = 0;
     attributeDescs[1].location = 1;
-    attributeDescs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    attributeDescs[1].offset = offsetof(mpGuiVertex, colour);
+    attributeDescs[1].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescs[1].offset = offsetof(mpGuiVertex, texCoord);
+
+    attributeDescs[2].binding = 0;
+    attributeDescs[2].location = 2;
+    attributeDescs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attributeDescs[2].offset = offsetof(mpGuiVertex, colour);
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -857,6 +883,8 @@ static void PrepareVkGuiPipeline(mpVkRenderer *renderer)
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &renderer->gui.descriptorSetLayout;
 
     VkResult error = vkCreatePipelineLayout(renderer->device, &pipelineLayoutInfo, nullptr, &renderer->gui.pipelineLayout);
     mp_assert(!error);
@@ -948,8 +976,7 @@ static void PrepareVkFrameBuffers(mpVkRenderer *renderer)
     }
 }
 
-
-static void CreateBuffer(VkPhysicalDevice gpu, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertyFlags, VkBuffer* buffer, VkDeviceMemory* bufferMemory)
+static void CreateBuffer(VkPhysicalDevice gpu, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertyFlags, VkBuffer &buffer, VkDeviceMemory &bufferMemory)
 {
     VkBufferCreateInfo bufferInfo = {};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -957,21 +984,21 @@ static void CreateBuffer(VkPhysicalDevice gpu, VkDevice device, VkDeviceSize siz
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkResult error = vkCreateBuffer(device, &bufferInfo, nullptr, buffer);
+    VkResult error = vkCreateBuffer(device, &bufferInfo, nullptr, &buffer);
     mp_assert(!error);
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(device, *buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = FindMemoryType(gpu, memRequirements.memoryTypeBits, propertyFlags);
 
-    error = vkAllocateMemory(device, &allocInfo, nullptr, bufferMemory);
+    error = vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory);
     mp_assert(!error);
 
-    vkBindBufferMemory(device, *buffer, *bufferMemory, 0);
+    vkBindBufferMemory(device, buffer, bufferMemory, 0);
 }
 
 inline static VkCommandBuffer BeginSingleTimeCommands(VkDevice device, VkCommandPool cmdPool)
@@ -1027,17 +1054,17 @@ struct mpMapVertexBufferDataInfo
     VkBufferUsageFlags usageFlags;
 };
 
-static void mapVertexBufferData(mpMapVertexBufferDataInfo &info)
+static void mapBufferData(mpMapVertexBufferDataInfo &info)
 {
     constexpr uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VkBuffer vertStagingbuffer;
     VkDeviceMemory vertStagingbufferMemory;
     void *vertData;
-    CreateBuffer(info.gpu, info.device, info.bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, &vertStagingbuffer, &vertStagingbufferMemory);
+    CreateBuffer(info.gpu, info.device, info.bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, bufferSrcFlags, vertStagingbuffer, vertStagingbufferMemory);
     vkMapMemory(info.device, vertStagingbufferMemory, 0, info.bufferSize, 0, &vertData);
     memcpy(vertData, info.rawBuffer, static_cast<size_t>(info.bufferSize));
     vkUnmapMemory(info.device, vertStagingbufferMemory);
-    CreateBuffer(info.gpu, info.device, info.bufferSize, info.usageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, info.buffer, info.bufferMemory);
+    CreateBuffer(info.gpu, info.device, info.bufferSize, info.usageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, *info.buffer, *info.bufferMemory);
 
     VkCommandBuffer cmdBuffer = BeginSingleTimeCommands(info.device, info.cmdPool);
     VkBufferCopy copyRegion = {};
@@ -1072,17 +1099,154 @@ static void PrepareVkGeometryBuffers(mpVkRenderer *renderer, const mpVoxelRegion
                 info.buffer = &renderer->vertexbuffers[x][y][z];
                 info.bufferMemory = &renderer->vertexbufferMemories[x][y][z];
                 info.usageFlags = vertUsageDstFlags;
-                mapVertexBufferData(info);
+                mapBufferData(info);
 
                 info.bufferSize = mesh.indexCount * sizeof(uint16_t);
                 info.rawBuffer = mesh.indices;
                 info.buffer = &renderer->indexbuffers[x][y][z];
                 info.bufferMemory = &renderer->indexbufferMemories[x][y][z];
                 info.usageFlags = indexUsageDstFlags;
-                mapVertexBufferData(info);
+                mapBufferData(info);
             }
         }
     }
+}
+// Fill in width, height, format, tiling, usaeFlags and propFlags in imageInfo
+static void createImage(mpVkRenderer *renderer, VkImageCreateInfo &imageInfo, VkImage &image, VkDeviceMemory &imageMemory, VkMemoryPropertyFlags properties)
+{
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult error = vkCreateImage(renderer->device, &imageInfo, nullptr, &image);
+    mp_assert(!error);
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(renderer->device, image, &memReqs);
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReqs.size;
+    allocInfo.memoryTypeIndex = FindMemoryType(renderer->gpu, memReqs.memoryTypeBits, properties);
+
+    error = vkAllocateMemory(renderer->device, &allocInfo, nullptr, &imageMemory);
+    mp_assert(!error);
+    vkBindImageMemory(renderer->device, image, imageMemory, 0);
+}
+
+static void transitionImageLayout(mpVkRenderer *renderer, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands(renderer->device, renderer->commandPool);
+
+    VkImageMemoryBarrier barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags sourceStage = 0;
+    VkPipelineStageFlags destStage = 0;
+    if(oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL){
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if(oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL){
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else{
+        MP_LOG_ERROR("RENDERER ERROR: Unsupported layout transition")
+    }
+    vkCmdPipelineBarrier(commandBuffer, sourceStage, destStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    EndSingleTimeCommands(renderer->device, renderer->commandPool, renderer->graphicsQueue, commandBuffer);
+}
+
+static void PrepareVkTextureImages(mpVkRenderer *renderer, const char *filePath)
+{
+    int32_t texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load(filePath, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
+    if(!pixels) {
+        MP_LOG_WARN("Failed to load image from file %s", filePath);
+    }
+    VkBuffer stagingbuffer;
+    VkDeviceMemory stagingbufferMemory;
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkMemoryPropertyFlags propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    CreateBuffer(renderer->gpu, renderer->device, imageSize, usage, propertyFlags, stagingbuffer, stagingbufferMemory);
+
+    void *data;
+    vkMapMemory(renderer->device, stagingbufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixels, static_cast<size_t>(imageSize));
+    vkUnmapMemory(renderer->device, stagingbufferMemory);
+    stbi_image_free(pixels);
+
+    VkImageCreateInfo imageInfo = {};
+    imageInfo.extent.width = texWidth;
+    imageInfo.extent.height = texHeight;
+    imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    createImage(renderer, imageInfo, renderer->gui.textureImage, renderer->gui.textureImageMemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    // TODO: hoist commandbuffer begin/end out of these two and wrap it around them instead
+    transitionImageLayout(renderer, renderer->gui.textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // Copy buffer to image
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands(renderer->device, renderer->commandPool);
+    VkBufferImageCopy region = {};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1};
+    vkCmdCopyBufferToImage(commandBuffer, stagingbuffer, renderer->gui.textureImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    EndSingleTimeCommands(renderer->device, renderer->commandPool, renderer->graphicsQueue, commandBuffer);
+    // End
+    transitionImageLayout(renderer, renderer->gui.textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    vkDestroyBuffer(renderer->device, stagingbuffer, nullptr);
+    vkFreeMemory(renderer->device, stagingbufferMemory, nullptr);
+}
+
+static void PrepareVkTextureImageViews(mpVkRenderer *renderer)
+{
+    renderer->gui.textureImageView = CreateImageView(renderer->device, renderer->gui.textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+static void PrepareVkTextureSampler(mpVkRenderer *renderer)
+{
+    VkSamplerCreateInfo samplerInfo = {};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    VkResult error = vkCreateSampler(renderer->device, &samplerInfo, nullptr, &renderer->gui.textureSampler);
+    mp_assert(!error);
 }
 
 static void PrepareVkCommandbuffers(mpVkRenderer *renderer, mpMemoryRegion tempMemory)
@@ -1092,22 +1256,26 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, mpMemoryRegion tempM
     uint32_t bufferSrcFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
-        CreateBuffer(renderer->gpu, renderer->device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bufferSrcFlags, &renderer->pUniformbuffers[i], &renderer->pUniformbufferMemories[i]);
-    // Prepare descriptor pool
-    VkDescriptorPoolSize poolSize = {};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = renderer->swapChainImageCount;
+        CreateBuffer(renderer->gpu, renderer->device, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, bufferSrcFlags, renderer->pUniformbuffers[i], renderer->pUniformbufferMemories[i]);
 
+    // Prepare descriptor pool
+    VkDescriptorPoolSize poolSizes[2] = {};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = renderer->swapChainImageCount;
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].descriptorCount = renderer->swapChainImageCount;
+
+    constexpr size_t poolSizeCount = arraysize(poolSizes);
     VkDescriptorPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = renderer->swapChainImageCount;
+    poolInfo.poolSizeCount = poolSizeCount;
+    poolInfo.pPoolSizes = poolSizes;
+    poolInfo.maxSets = renderer->swapChainImageCount * poolSizeCount;
 
     VkResult error = vkCreateDescriptorPool(renderer->device, &poolInfo, nullptr, &renderer->descriptorPool);
     mp_assert(!error);
     // Prepare descriptorsets
-    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(mpAllocateIntoRegion(tempMemory, sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount));
+    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(mpAlloc(tempMemory, sizeof(VkDescriptorSetLayout) * renderer->swapChainImageCount));
     for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
         pLayouts[i] = renderer->descriptorSetLayout;
 
@@ -1134,6 +1302,30 @@ static void PrepareVkCommandbuffers(mpVkRenderer *renderer, mpMemoryRegion tempM
         descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrite.descriptorCount = 1;
         descriptorWrite.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(renderer->device, 1, &descriptorWrite, 0, nullptr);
+    }
+    // Prepare descriptor sets for gui
+    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++)
+        pLayouts[i] = renderer->gui.descriptorSetLayout;
+
+    descriptorSetAllocInfo.pSetLayouts = pLayouts;
+
+    error = vkAllocateDescriptorSets(renderer->device, &descriptorSetAllocInfo, renderer->gui.pDescriptorSets);
+    mp_assert(!error);
+
+    for(uint32_t i = 0; i < renderer->swapChainImageCount; i++){
+        VkDescriptorImageInfo imageInfo = {};
+        imageInfo.sampler = renderer->gui.textureSampler;
+        imageInfo.imageView = renderer->gui.textureImageView;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet descriptorWrite = {};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = renderer->gui.pDescriptorSets[i];
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pImageInfo = &imageInfo;
 
         vkUpdateDescriptorSets(renderer->device, 1, &descriptorWrite, 0, nullptr);
     }
@@ -1171,7 +1363,7 @@ static bool32 CheckValidationLayerSupport(mpMemoryRegion vulkanRegion)
 {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    VkLayerProperties* availableLayers = static_cast<VkLayerProperties*>(mpAllocateIntoRegion(vulkanRegion, sizeof(VkLayerProperties) * layerCount));
+    VkLayerProperties* availableLayers = static_cast<VkLayerProperties*>(mpAlloc(vulkanRegion, sizeof(VkLayerProperties) * layerCount));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
 
     bool32 layerFound = false;
@@ -1255,7 +1447,7 @@ inline static void DrawImages(mpVkRenderer &renderer, const mpVoxelRegion *regio
 
 void mpVulkanInit(mpCore *core, mpMemoryRegion vulkanMemory, mpMemoryRegion tempMemory, bool32 enableValidation)
 {
-    core->rendererHandle = mpAllocateIntoRegion(vulkanMemory, sizeof(mpVkRenderer));
+    core->rendererHandle = mpAlloc(vulkanMemory, sizeof(mpVkRenderer));
     mpVkRenderer *renderer = static_cast<mpVkRenderer*>(core->rendererHandle);
 
     if(enableValidation && !CheckValidationLayerSupport(vulkanMemory))
@@ -1269,16 +1461,20 @@ void mpVulkanInit(mpCore *core, mpMemoryRegion vulkanMemory, mpMemoryRegion temp
     PrepareVkPipeline(renderer);
     PrepareVkGuiPipeline(renderer);
 
-    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  mpAllocateIntoRegion(vulkanMemory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       mpAllocateIntoRegion(vulkanMemory, sizeof(VkBuffer) * renderer->swapChainImageCount));
-    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAllocateIntoRegion(vulkanMemory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
-    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAllocateIntoRegion(vulkanMemory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
-    renderer->pInFlightImageFences =   static_cast<VkFence*>(        mpAllocateIntoRegion(vulkanMemory, sizeof(VkFence) * renderer->swapChainImageCount));
-    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(mpAllocateIntoRegion(vulkanMemory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->pFramebuffers =          static_cast<VkFramebuffer*>(  mpAlloc(vulkanMemory, sizeof(VkFramebuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbuffers =        static_cast<VkBuffer*>(       mpAlloc(vulkanMemory, sizeof(VkBuffer) * renderer->swapChainImageCount));
+    renderer->pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAlloc(vulkanMemory, sizeof(VkDeviceMemory) * renderer->swapChainImageCount));
+    renderer->pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAlloc(vulkanMemory, sizeof(VkCommandBuffer) * renderer->swapChainImageCount));
+    renderer->pInFlightImageFences =   static_cast<VkFence*>(        mpAlloc(vulkanMemory, sizeof(VkFence) * renderer->swapChainImageCount));
+    renderer->pDescriptorSets =        static_cast<VkDescriptorSet*>(mpAlloc(vulkanMemory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
+    renderer->gui.pDescriptorSets =    static_cast<VkDescriptorSet*>(mpAlloc(vulkanMemory, sizeof(VkDescriptorSet) * renderer->swapChainImageCount));
 
     PrepareDepthResources(renderer);
     PrepareVkFrameBuffers(renderer);
     PrepareVkGeometryBuffers(renderer, core->region);
+    PrepareVkTextureImages(renderer, "../assets/strings/test.png");
+    PrepareVkTextureImageViews(renderer);
+    PrepareVkTextureSampler(renderer);
     PrepareVkCommandbuffers(renderer, tempMemory);
     PrepareVkSyncObjects(renderer);
 }
@@ -1308,14 +1504,14 @@ void mpVkRecreateGeometryBuffer(mpHandle rendererHandle, mpMesh &mesh, const vec
     info.buffer = &renderer->vertexbuffers[index.x][index.y][index.z];
     info.bufferMemory = &renderer->vertexbufferMemories[index.x][index.y][index.z];
     info.usageFlags = vertUsageDstFlags;
-    mapVertexBufferData(info);
+    mapBufferData(info);
 
     info.bufferSize = mesh.indexCount * sizeof(uint16_t);
     info.rawBuffer = mesh.indices;
     info.buffer = &renderer->indexbuffers[index.x][index.y][index.z];
     info.bufferMemory = &renderer->indexbufferMemories[index.x][index.y][index.z];
     info.usageFlags = indexUsageDstFlags;
-    mapVertexBufferData(info);
+    mapBufferData(info);
 }
 
 void mpVkRecreateGUIBuffers(mpHandle rendererHandle, const mpGuiData &guiData)
@@ -1343,14 +1539,14 @@ void mpVkRecreateGUIBuffers(mpHandle rendererHandle, const mpGuiData &guiData)
     info.buffer = &renderer->gui.vertexbuffer;
     info.bufferMemory = &renderer->gui.vertexbufferMemory;
     info.usageFlags = vertUsageDstFlags;
-    mapVertexBufferData(info);
+    mapBufferData(info);
 
     info.bufferSize = guiData.indexCount * sizeof(uint16_t);
     info.rawBuffer = guiData.indices;
     info.buffer = &renderer->gui.indexbuffer;
     info.bufferMemory = &renderer->gui.indexbufferMemory;
     info.usageFlags = indexUsageDstFlags;
-    mapVertexBufferData(info);
+    mapBufferData(info);
 }
 
 static void CleanupSwapChain(mpVkRenderer *renderer)
@@ -1432,6 +1628,7 @@ inline static void DrawFrame(mpVkRenderer &renderer, const mpVoxelRegion *region
     }
     if(guiIndexCount > 0){
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.gui.pipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer.gui.pipelineLayout, 0, 1, &renderer.gui.pDescriptorSets[imageIndex], 0, nullptr);
         drawIndexed(commandBuffer, &renderer.gui.vertexbuffer, renderer.gui.indexbuffer, guiIndexCount);
     }
 
@@ -1514,6 +1711,12 @@ void mpVulkanCleanup(mpHandle *rendererHandle)
     vkDestroyShaderModule(renderer->device, renderer->gui.vertShaderModule, nullptr);
     vkDestroyShaderModule(renderer->device, renderer->gui.fragShaderModule, nullptr);
     vkDestroyDescriptorSetLayout(renderer->device, renderer->descriptorSetLayout, nullptr);
+
+    vkDestroyDescriptorSetLayout(renderer->device, renderer->gui.descriptorSetLayout, nullptr);
+    vkDestroySampler(renderer->device, renderer->gui.textureSampler, nullptr);
+    vkDestroyImageView(renderer->device, renderer->gui.textureImageView, nullptr);
+    vkDestroyImage(renderer->device, renderer->gui.textureImage, nullptr);
+    vkFreeMemory(renderer->device, renderer->gui.textureImageMemory, nullptr);
 
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){

@@ -4,7 +4,6 @@
 #include <cstring>
 #include "vulkan\vulkan.h"
 #include "mp_maths.h"
-#include "permutation.h"
 #include "events.h"
 
 #define MP_INTERNAL
@@ -43,6 +42,7 @@ constexpr int32_t MP_REGION_SIZE = 10;
 
 constexpr float MP_GRAVITY_CONSTANT = 9.81f;
 constexpr vec3 gravityVec3 = {0.0f, 0.0f, -MP_GRAVITY_CONSTANT * 5};
+constexpr float vScale = 1.0f;
 
 typedef int32_t bool32;
 typedef void* mpHandle;
@@ -74,6 +74,19 @@ typedef void (*mpThreadProc)(void*);
 struct mpThreadContext
 {
     int32_t ID;
+};
+
+struct mpVertex
+{
+    vec3 position;
+    vec3 normal;
+    vec4 colour;
+};
+
+struct mpQuadFaceArray
+{
+    vec3 data[4];
+    vec3 normal;
 };
 
 struct mpQuad
@@ -122,7 +135,7 @@ struct mpVoxelRegion
 
 enum mpSubRegionFlags
 {
-    MP_SUBREG_FLAG_EMPTY            = 0x0001,
+    MP_SUBREG_FLAG_ACTIVE           = 0x0001,
     MP_SUBREG_FLAG_NEIGHBOUR_NORTH  = 0x0002,
     MP_SUBREG_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
     MP_SUBREG_FLAG_NEIGHBOUR_TOP    = 0x0008,
@@ -142,12 +155,13 @@ enum mpVoxelFlags
     MP_VOXEL_FLAG_DRAW_WEST   = 0x00000020,
     MP_VOXEL_FLAG_ACTIVE      = 0x00000040,
 };
-
+// rename to coreflags
 enum mpRenderFlags
 {
-    MP_RENDER_FLAG_ENABLE_VK_VALIDATION = 0x0001,
-    MP_RENDER_FLAG_RESERVED             = 0x0002,
-    MP_RENDER_FLAG_GUI_UPDATED          = 0x0004,
+    MP_RENDER_FLAG_ENABLE_VK_VALIDATION  = 0x0001,
+    MP_RENDER_FLAG_RESERVED              = 0x0002,
+    MP_RENDER_FLAG_GUI_UPDATED           = 0x0004,
+    MP_RENDER_FLAG_GENERATE_PERMUTATIONS = 0x0008,
 };
 
 struct mpCamera

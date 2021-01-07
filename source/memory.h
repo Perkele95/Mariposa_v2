@@ -7,103 +7,44 @@
 
 struct mpMemoryRegion_T
 {
-    mpMemoryRegion_T *next;
-    uint8_t *data;
-    size_t dataSize;
-    size_t regionSize;
-    uint32_t poolID;
+    void *data;
+    size_t totalSize;
+    size_t contentSize;
 };
-
-struct mpMemoryPool
-{
-    void *start;
-    mpMemoryRegion_T *head;
-    uint32_t ID;
-};
-
 typedef mpMemoryRegion_T *mpMemoryRegion;
-// Creates a memory pool header
-inline mpMemoryPool mpCreateMemoryPool(uint32_t regionCount, size_t regionSize, uint32_t uniqueID)
-{
-    size_t poolSize = regionCount * (regionSize + sizeof(mpMemoryRegion_T));
-    mpMemoryPool pool = {};
-    pool.start = malloc(poolSize);
-    pool.ID = uniqueID;
-    pool.head = static_cast<mpMemoryRegion_T*>(pool.start);
-    memset(pool.head, 0, poolSize);
 
-    // Prepare free list
-    uint8_t *poolStart = reinterpret_cast<uint8_t*>(pool.head);
-    for(uint32_t i = 0; i < regionCount; i++)
-    {
-        size_t regionStride = regionSize + sizeof(mpMemoryRegion_T);
-        size_t stride = i * regionStride;
-        mpMemoryRegion_T *region = reinterpret_cast<mpMemoryRegion_T*>(poolStart + stride);
-        region->data = poolStart + stride + sizeof(mpMemoryRegion_T);
-        region->regionSize = regionSize;
-        region->poolID = uniqueID;
-        if(i < (regionCount - 1))
-            region->next = reinterpret_cast<mpMemoryRegion_T*>(poolStart + ((i + 1) * regionStride));
-    }
-    return pool;
-}
-// Fetches a fresh region from the given pool
-inline mpMemoryRegion mpGetMemoryRegion(mpMemoryPool *pool)
+inline mpMemoryRegion mpCreateMemoryRegion(size_t regionSize)
 {
-    mpMemoryRegion region = pool->head;
-    if(region == nullptr)
-    {
-        MP_LOG_ERROR("MEMORY ERROR: mpGetMemoryRegion failed: pool(%d) out of free regions", pool->ID)
-        return nullptr;
-    }
-    pool->head = pool->head->next;
-
+    mpMemoryRegion region = static_cast<mpMemoryRegion>(malloc(regionSize + sizeof(mpMemoryRegion_T)));
+    region->totalSize = regionSize;
+    region->contentSize = 0;
+    region->data = reinterpret_cast<uint8_t*>(region) + sizeof(mpMemoryRegion_T);
+    memset(region->data, 0, regionSize);
     return region;
 }
-// Fetches an alias to the regions data ptr, then bumbs the regions data ptr forward by allocationSize
-inline void* mpAllocateIntoRegion(mpMemoryRegion region, size_t allocationSize)
-{
-    void *data = region->data;
-    region->data += allocationSize;
-    region->dataSize += allocationSize;
-    if(region->dataSize > region->regionSize)
-    {
-        MP_LOG_ERROR("MEMORY ERROR: mpAllocateIntoRegion failed: region(pool: %d) is out of memory\n", region->poolID)
-        return nullptr;
-    }
 
-    return data;
+inline void mpDestroyMemoryRegion(mpMemoryRegion region)
+{
+    free(region);
 }
-// Allows reuse of the same region by deleting it's memory.
+
 inline void mpResetMemoryRegion(mpMemoryRegion region)
 {
-    region->data -= region->dataSize;
-    memset(region->data, 0, region->dataSize);
-    region->dataSize = 0;
+    region->data = static_cast<uint8_t*>(region->data) - region->contentSize;
+    region->contentSize = 0;
+    memset(region->data, 0, region->totalSize);
 }
-// Free the region and releases it back to the memory pool
-inline void mpFreeMemoryRegion(mpMemoryPool *pool, mpMemoryRegion region)
+// TODO: make alloc safe
+inline void *mpAlloc(mpMemoryRegion region, size_t size)
 {
-    if(region == nullptr)
-    {
-        puts("MEMORY ERROR: mpFreeMemoryRegion failed: region is null");
-        return;
+    void *result = nullptr;
+    if(region->contentSize + size > region->totalSize){
+        MP_LOG_ERROR("MEMORY ERROR: Allocation request denied, cannot allocate past region");
     }
-    if(pool->ID != region->poolID)
-    {
-        MP_LOG_ERROR("MEMORY ERROR: mpFreeMemoryRegion failed: given region does not belong to pool %d\n", pool->ID)
-        return;
+    else{
+        result = region->data;
+        region->data = static_cast<uint8_t*>(region->data) + size;
+        region->contentSize += size;
     }
-    region->data -= region->dataSize;
-    memset(region->data, 0, region->dataSize);
-    region->dataSize = 0;
-
-    region->next = pool->head;
-    pool->head = region;
-}
-// Completely terminates a pool
-inline void mpDestroyMemoryPool(mpMemoryPool *pool)
-{
-    free(pool->start);
-    memset(pool, 0, sizeof(mpMemoryPool));
+    return result;
 }

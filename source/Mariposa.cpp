@@ -61,7 +61,7 @@ inline static mpQuad mpCreateQuad(const mpQuadFaceArray &quadFace, vec3 offset, 
     return quad;
 }
 // mpCreateMesh resets tempMemory after use.
-static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion meshRegion, mpMemoryRegion tempMemory)
+static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpMemoryRegion tempMemory)
 {
     constexpr float VOXEL_SCALE = 0.5f;
     constexpr uint16_t vertexStride = 4;
@@ -69,11 +69,11 @@ static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion meshRegio
     uint16_t vertexCount = 0, indexCount = 0;
 
     constexpr size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
-    mpVertex *tempBlockVertices = static_cast<mpVertex*>(mpAllocateIntoRegion(tempMemory, tempVertBlockSize));
+    mpVertex *tempBlockVertices = static_cast<mpVertex*>(mpAlloc(tempMemory, tempVertBlockSize));
     mpVertex *tempBlockVertIncrementer = tempBlockVertices;
 
     constexpr size_t tempIndexBlockSize = sizeof(uint16_t) * 18 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
-    uint16_t *tempBlockIndices = static_cast<uint16_t*>(mpAllocateIntoRegion(tempMemory, tempIndexBlockSize));
+    uint16_t *tempBlockIndices = static_cast<uint16_t*>(mpAlloc(tempMemory, tempIndexBlockSize));
     uint16_t *tempBlockIndexIncrementer = tempBlockIndices;
 
     constexpr size_t vertexCopySize = sizeof(mpVertex) * vertexStride;
@@ -158,23 +158,24 @@ static mpMesh mpCreateMesh(mpVoxelSubRegion &subRegion, mpMemoryRegion meshRegio
             }
         }
     }
-    mpMesh mesh = {};
-    mesh.vertexCount = vertexCount;
-    mesh.indexCount = indexCount;
-    mesh.memReg = meshRegion;
-
-    mpResetMemoryRegion(meshRegion);
     const size_t verticesSize = vertexCount * sizeof(mpVertex);
     const size_t indicesSize = indexCount * sizeof(uint16_t);
-
-    mesh.vertices = static_cast<mpVertex*>(mpAllocateIntoRegion(mesh.memReg, verticesSize));
-    mesh.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(mesh.memReg, indicesSize));
+    mesh.vertexCount = vertexCount;
+    mesh.indexCount = indexCount;
+    if(mesh.memReg == nullptr){
+        mesh.memReg = mpCreateMemoryRegion(verticesSize + indicesSize);
+    }
+    else if(mesh.memReg->totalSize < verticesSize + indicesSize){
+        mpDestroyMemoryRegion(mesh.memReg);
+        mesh.memReg = mpCreateMemoryRegion(verticesSize + indicesSize);
+    }
+    mpResetMemoryRegion(mesh.memReg);
+    mesh.vertices = static_cast<mpVertex*>(mpAlloc(mesh.memReg, verticesSize));
+    mesh.indices = static_cast<uint16_t*>(mpAlloc(mesh.memReg, indicesSize));
 
     memcpy(mesh.vertices, tempBlockVertices, verticesSize);
     memcpy(mesh.indices, tempBlockIndices, indicesSize);
     mpResetMemoryRegion(tempMemory);
-
-    return mesh;
 }
 // TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
 static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
@@ -204,6 +205,7 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
                 voxel.colour.g = static_cast<uint8_t>(moistureLevel);
                 voxel.colour.b = 0x4A;
                 voxel.colour.a = 0xFF;
+                subRegion.flags |= MP_SUBREG_FLAG_ACTIVE;
             }
         }
     }
@@ -268,9 +270,9 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
     }
 }
 
-static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryPool *meshPool, mpMemoryRegion tempMemory)
+static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryRegion tempMemory)
 {
-    mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAllocateIntoRegion(regionMemory, sizeof(mpVoxelRegion)));
+    mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAlloc(regionMemory, sizeof(mpVoxelRegion)));
     // Set active flag on voxels
     constexpr int32_t regionMax = MP_REGION_SIZE - 1;
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
@@ -309,8 +311,7 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryP
                 mpVoxelSubRegion &subRegion = region->subRegions[x][y][z];
                 mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
                 // Create mesh
-                mpMemoryRegion meshRegion = mpGetMemoryRegion(meshPool);
-                region->meshArray[x][y][z] = mpCreateMesh(subRegion, meshRegion, tempMemory);
+                mpCreateMesh(subRegion, region->meshArray[x][y][z], tempMemory);
             }
         }
     }
@@ -517,7 +518,7 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
 
 inline static void mpPrintMemoryInfo(mpMemoryRegion region, const char *name)
 {
-    MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->dataSize / 1000), (region->regionSize) / 1000)
+    MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->contentSize / 1000), (region->totalSize) / 1000)
 }
 
 int main(int argc, char *argv[])
@@ -526,26 +527,23 @@ int main(int argc, char *argv[])
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
     core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION;
+    core.renderFlags |= MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
     core.gameState = MP_GAMESTATE_ACTIVE;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
-    // TODO: allocate pool header on heap as well
-    mpMemoryPool subRegionPool = mpCreateMemoryPool(2, MegaBytes(70), 1);
-    mpMemoryPool smallPool = mpCreateMemoryPool(6, MegaBytes(1), 2);
 
-    mpMemoryRegion subRegionMemory = mpGetMemoryRegion(&subRegionPool);
-    mpMemoryRegion staticMemory = mpGetMemoryRegion(&smallPool);
-    mpMemoryRegion tempMemory = mpGetMemoryRegion(&subRegionPool);
+    mpMemoryRegion subRegionMemory = mpCreateMemoryRegion(MegaBytes(100));
+    mpMemoryRegion staticMemory = mpCreateMemoryRegion(MegaBytes(100));
+    mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
 
     constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
-    mpMemoryPool meshPool = mpCreateMemoryPool(subRegionCount, MegaBytes(1), 42);
-    core.region = mpGenerateWorldData(subRegionMemory, &meshPool, tempMemory);
+    core.region = mpGenerateWorldData(subRegionMemory, tempMemory);
 
     core.gui = mpGuiInitialise(12, 20);
 
-    mpMemoryRegion vulkanMemory = mpGetMemoryRegion(&smallPool);
+    mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
     mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
 
     //mpDistribute(core.region, mpSpawnTree, 2);
@@ -553,7 +551,6 @@ int main(int argc, char *argv[])
     mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
     mpPrintMemoryInfo(staticMemory, "staticMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
-    MP_LOG_INFO("Meshpool consumes: %zu kB\n", subRegionCount * sizeof(mpVoxelSubRegion) / 1000);
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 2.0f;
@@ -661,7 +658,7 @@ int main(int argc, char *argv[])
                         mpSetDrawFlags(subRegion, core.region, vec3Int{x, y, z});
 
                         mpMesh &mesh = core.region->meshArray[x][y][z];
-                        mesh = mpCreateMesh(subRegion, mesh.memReg, tempMemory);
+                        mpCreateMesh(subRegion, mesh, tempMemory);
                         subRegion.flags &= ~MP_SUBREG_FLAG_DIRTY;
                         constexpr uint32_t regionSize2x = MP_REGION_SIZE * MP_REGION_SIZE;
                         mpVkRecreateGeometryBuffer(core.rendererHandle, mesh, vec3Int{x, y, z});
@@ -680,9 +677,10 @@ int main(int argc, char *argv[])
     }
     // General :: cleanup
     mpVulkanCleanup(&core.rendererHandle);
-    mpDestroyMemoryPool(&meshPool);
-    mpDestroyMemoryPool(&smallPool);
-    mpDestroyMemoryPool(&subRegionPool);
+    mpDestroyMemoryRegion(subRegionMemory);
+    mpDestroyMemoryRegion(staticMemory);
+    mpDestroyMemoryRegion(vulkanMemory);
+    mpDestroyMemoryRegion(tempMemory);
 
     return 0;
 }

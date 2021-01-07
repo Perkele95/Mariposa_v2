@@ -8,6 +8,7 @@ typedef int32_t bool32;
 struct mpGuiVertex
 {
     vec2 position;
+    vec2 texCoord;
     vec4 colour;
 };
 struct mpGuiQuad
@@ -43,7 +44,6 @@ struct mpGUI
     }state;
 
     mpPoint extent;
-    mpMemoryPool memoryPool;
     mpMemoryRegion memory;
     mpGuiData data;
     uint32_t maxElements;
@@ -59,10 +59,9 @@ inline mpGUI mpGuiInitialise(const uint32_t memoryID, const uint32_t maxElements
     const size_t indicesSize = sizeof(uint16_t) * maxElements;
     mpGUI gui = {};
     memset(&gui, 0, sizeof(mpGUI));
-    gui.memoryPool = mpCreateMemoryPool(1, verticesSize + indicesSize, memoryID);
-    gui.memory = mpGetMemoryRegion(&gui.memoryPool);
-    gui.data.vertices = static_cast<mpGuiVertex*>(mpAllocateIntoRegion(gui.memory, verticesSize));
-    gui.data.indices = static_cast<uint16_t*>(mpAllocateIntoRegion(gui.memory, indicesSize));
+    gui.memory = mpCreateMemoryRegion(verticesSize + indicesSize);
+    gui.data.vertices = static_cast<mpGuiVertex*>(mpAlloc(gui.memory, verticesSize));
+    gui.data.indices = static_cast<uint16_t*>(mpAlloc(gui.memory, indicesSize));
     gui.maxElements = maxElements;
 
     return gui;
@@ -114,10 +113,10 @@ inline void mpDrawRect2D(mpGUI &gui, const mpRect2D &rect, const vec4 colour)
         indexOffset,
     };
     // Push data into gui memory
-    gui.data.vertices[(gui.elementCount * 4)] = mpGuiVertex{topLeft, colour};
-    gui.data.vertices[(gui.elementCount * 4) + 1] = mpGuiVertex{topRight, colour};
-    gui.data.vertices[(gui.elementCount * 4) + 2] = mpGuiVertex{bottomRight, colour};
-    gui.data.vertices[(gui.elementCount * 4) + 3] = mpGuiVertex{bottomLeft, colour};
+    gui.data.vertices[(gui.elementCount * 4)] = mpGuiVertex{topLeft, {1.0f, 0.0f}, colour};
+    gui.data.vertices[(gui.elementCount * 4) + 1] = mpGuiVertex{topRight, {0.0f, 0.0f}, colour};
+    gui.data.vertices[(gui.elementCount * 4) + 2] = mpGuiVertex{bottomRight, {0.0f, 1.0f}, colour};
+    gui.data.vertices[(gui.elementCount * 4) + 3] = mpGuiVertex{bottomLeft, {1.0f, 1.0f}, colour};
     gui.data.vertexCount += 4;
 
     gui.data.indices[(gui.elementCount * 6)] = static_cast<uint16_t>(indices[0]);
