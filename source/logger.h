@@ -20,9 +20,19 @@
 #define MP_LOG_INFO(format, ...) MP_SET_LOG(LOGGER_COLOUR_GREEN, __LINE__) printf(format, __VA_ARGS__); MP_RESET_LOG(__LINE__)
 #define MP_LOG_WARN(format, ...) MP_SET_LOG(LOGGER_COLOUR_YELLOW, __LINE__) printf(format, __VA_ARGS__); MP_RESET_LOG(__LINE__)
 #define MP_LOG_ERROR(format, ...) MP_SET_LOG(LOGGER_COLOUR_RED, __LINE__) printf(format, __VA_ARGS__); MP_RESET_LOG(__LINE__)
+
+#define MP_PUTS_TRACE(string) MP_SET_LOG(LOGGER_COLOUR_LIGHT_YELLOW, __LINE__) puts(string); MP_RESET_LOG(__LINE__)
+#define MP_PUTS_INFO(string) MP_SET_LOG(LOGGER_COLOUR_GREEN, __LINE__) puts(string); MP_RESET_LOG(__LINE__)
+#define MP_PUTS_WARN(string) MP_SET_LOG(LOGGER_COLOUR_YELLOW, __LINE__) puts(string); MP_RESET_LOG(__LINE__)
+#define MP_PUTS_ERROR(string) MP_SET_LOG(LOGGER_COLOUR_RED, __LINE__) puts(string); MP_RESET_LOG(__LINE__)
 #else
 #define MP_LOG_TRACE(format, ...)
 #define MP_LOG_INFO(format, ...)
 #define MP_LOG_WARN(format, ...)
 #define MP_LOG_ERROR(format, ...)
+
+#define MP_PUTS_TRACE(string)
+#define MP_PUTS_INFO(string)
+#define MP_PUTS_WARN(string)
+#define MP_PUTS_ERROR(string)
 #endif

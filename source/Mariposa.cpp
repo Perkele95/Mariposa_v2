@@ -1,6 +1,6 @@
 #include "Mariposa.h"
 #include "Win32_Mariposa.h"
-#include "VulkanLayer.h"
+#include "renderer\renderer.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -535,21 +535,32 @@ int main(int argc, char *argv[])
     core.callbacks = PlatformGetCallbacks();
 
     mpMemoryRegion subRegionMemory = mpCreateMemoryRegion(MegaBytes(100));
-    mpMemoryRegion staticMemory = mpCreateMemoryRegion(MegaBytes(100));
+    mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
     mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
 
     constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
     core.region = mpGenerateWorldData(subRegionMemory, tempMemory);
 
-    core.gui = mpGuiInitialise(12, 20);
+    mpRenderer renderer = {};
+    memset(&renderer, 0, sizeof(mpRenderer));
+    renderer.LinkMemory(vulkanMemory, tempMemory);
+    renderer.LoadShaders(core.callbacks);
+    renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
 
-    mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
-    mpVulkanInit(&core, vulkanMemory, tempMemory, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
+    const char *textures[] = {
+        "../assets/strings/test.png",
+        "../assets/strings/resume.png",
+    };
+    constexpr uint32_t textureCount = arraysize(textures);
+
+    renderer.LoadTextures(textures, textureCount);
+    renderer.InitResources(core);
+
+    core.gui = mpGuiInitialise(textureCount, textureCount);
 
     //mpDistribute(core.region, mpSpawnTree, 2);
 
     mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
-    mpPrintMemoryInfo(staticMemory, "staticMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
 
     core.camera.speed = 10.0f;
@@ -596,15 +607,16 @@ int main(int argc, char *argv[])
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f});
-            if(mpButton(core.gui, 1, {400, 400})){
+            mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f}, 0);
+            if(mpButton(core.gui, 1, {400, 400}, 0)){
                 // -> pause menu button clicked
                 // Doesn't seem to be working yet
             }
         }
 
         mpGuiEnd(core.gui);
-        mpVkRecreateGUIBuffers(core.rendererHandle, core.gui.data);
+        for(uint32_t i = 0; i < textureCount; i++)
+            renderer.RecreateGuiBuffer(core.gui.meshes[i], i);
 
         // Core :: Clamp rotation values
         if(core.camera.pitch > core.camera.pitchClamp)
@@ -661,13 +673,13 @@ int main(int argc, char *argv[])
                         mpCreateMesh(subRegion, mesh, tempMemory);
                         subRegion.flags &= ~MP_SUBREG_FLAG_DIRTY;
                         constexpr uint32_t regionSize2x = MP_REGION_SIZE * MP_REGION_SIZE;
-                        mpVkRecreateGeometryBuffer(core.rendererHandle, mesh, vec3Int{x, y, z});
+                        renderer.RecreateSceneBuffer(mesh, x, y, z);
                     }
                 }
             }
         }
         // Renderer :: Render
-        mpVulkanUpdate(&core, vulkanMemory, tempMemory);
+        renderer.Update(core);
         mpResetMemoryRegion(tempMemory);
         // Core :: Resets
         core.windowInfo.hasResized = false;
@@ -676,9 +688,8 @@ int main(int argc, char *argv[])
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
-    mpVulkanCleanup(&core.rendererHandle);
+    renderer.Cleanup();
     mpDestroyMemoryRegion(subRegionMemory);
-    mpDestroyMemoryRegion(staticMemory);
     mpDestroyMemoryRegion(vulkanMemory);
     mpDestroyMemoryRegion(tempMemory);
 

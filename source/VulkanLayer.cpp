@@ -41,11 +41,6 @@ struct UniformbufferObject
 	alignas(4) float ambient;
 };
 
-struct LightUBO
-{
-
-};
-
 struct mpVkRenderer
 {
     VkInstance instance;
@@ -98,7 +93,6 @@ struct mpVkRenderer
     } gui;
 
     VkFramebuffer *pFramebuffers;
-    bool32 *pFramebufferResized;
     uint32_t currentFrame;
 
     VkCommandPool commandPool;

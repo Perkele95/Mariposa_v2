@@ -21,8 +21,8 @@
 #endif
 
 #include "memory.h"
-#include "logger.h"
-#include "profiler.h"
+#include "logger.h"//TODO: exclude this from release mode
+#include "profiler.h"//TODO: exclude this from release mode
 #include "mpGui.h"
 
 constexpr uint64_t UINT64MAX = 0xFFFFFFFFFFFFFFFF;
@@ -46,7 +46,7 @@ constexpr float vScale = 1.0f;
 
 typedef int32_t bool32;
 typedef void* mpHandle;
-typedef uint32_t mpBitField;
+typedef uint32_t mpFlags;
 typedef uint16_t mpBitFieldShort;
 
 struct mpWindowData
@@ -116,21 +116,21 @@ union mpVoxelColour
 struct mpVoxel
 {
     mpVoxelColour colour;
-    mpBitField flags;
+    mpFlags flags;
 };
 
 struct mpVoxelSubRegion
 {
     mpVoxel voxels[MP_SUBREGION_SIZE][MP_SUBREGION_SIZE][MP_SUBREGION_SIZE];
     vec3 position;
-    mpBitField flags;
+    mpFlags flags;
 };
 
 struct mpVoxelRegion
 {
     mpVoxelSubRegion subRegions[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
     mpMesh meshArray[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
-    mpBitField reserved;
+    mpFlags reserved;
 };
 
 enum mpSubRegionFlags
@@ -155,7 +155,7 @@ enum mpVoxelFlags
     MP_VOXEL_FLAG_DRAW_WEST   = 0x00000020,
     MP_VOXEL_FLAG_ACTIVE      = 0x00000040,
 };
-// rename to coreflags
+// split coreflags & renderingflags
 enum mpRenderFlags
 {
     MP_RENDER_FLAG_ENABLE_VK_VALIDATION  = 0x0001,
@@ -197,13 +197,12 @@ struct mpCore
     mpWindowData windowInfo;
     mpCallbacks callbacks;
     mpEventReceiver eventReceiver;
-    mpBitField gameState;
+    mpFlags gameState;
 
     mpCamera camera;
-    mpBitField continuousEvents;
+    mpFlags continuousEvents;
 
-    mpHandle rendererHandle;
-    mpBitField renderFlags;
+    mpFlags renderFlags;
     mpVoxelRegion *region;
     mpPointLight pointLight;
     mpGUI gui;

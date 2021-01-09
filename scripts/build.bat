@@ -11,5 +11,6 @@ pushd ..\bin
 
 REM x64 build
 set srcPath=..\source\
-cl %CommonCompilerFlags% %srcPath%Mariposa.cpp %srcPath%Win32_Mariposa.cpp %srcPath%VulkanLayer.cpp /link %CommonLinkerFlags%
+set compilationUnits=%srcPath%Mariposa.cpp %srcPath%Win32_Mariposa.cpp %srcPath%\renderer\renderer.cpp
+cl %CommonCompilerFlags% %compilationUnits% /link %CommonLinkerFlags%
 popd
