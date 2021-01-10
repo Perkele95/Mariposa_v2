@@ -35,14 +35,12 @@ struct mpRenderer
     // API
     void LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion temporaryMemory);
     void InitDevice(mpCore &core, bool32 enableValidation);
-    void LoadShaders(const mpCallbacks &callbacks);
     void LoadTextures(const char *paths[], uint32_t count);
     void InitResources(mpCore &core);
-    void RecreateGuiBuffer(mpGuiMesh &mesh, uint32_t index);
+    void RecreateGuiBuffers(mpGUI &gui);
     void RecreateSceneBuffer(mpMesh &mesh, uint32_t x, uint32_t y, uint32_t z);
     void Update(mpCore &core);
-
-    ~mpRenderer();
+    void Cleanup();
 private:
     // MP memory
     mpMemoryRegion mpVkMemory;
@@ -139,10 +137,11 @@ private:
     bool32 CheckPhysicalDeviceSuitability(VkPhysicalDevice &checkedPhysDevice);
     VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
     void PrepareRenderPass();
+    void LoadShaders(const mpCallbacks &callbacks);
     void PrepareScenePipeline();
     void PrepareGuiPipeline();
     VkImage CreateImage(VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage);
-    void BindImageMemory(VkImage image, VkDeviceMemory imageMemory, VkMemoryPropertyFlags memProps);
+    void BindImageMemory(VkImage &image, VkDeviceMemory &imageMemory, VkMemoryPropertyFlags memProps);
     void PrepareDepthResources();
     void PrepareFramebuffers();
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertyFlags, VkBuffer &buffer, VkDeviceMemory &bufferMemory);

@@ -541,22 +541,19 @@ int main(int argc, char *argv[])
     constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
     core.region = mpGenerateWorldData(subRegionMemory, tempMemory);
 
-    mpRenderer renderer = {};
-    memset(&renderer, 0, sizeof(mpRenderer));
-    renderer.LinkMemory(vulkanMemory, tempMemory);
-    renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
-    renderer.LoadShaders(core.callbacks);
-
     const char *textures[] = {
         "../assets/strings/test.png",
         "../assets/strings/resume.png",
     };
     constexpr uint32_t textureCount = arraysize(textures);
+    core.gui = mpGuiInitialise(textureCount, textureCount);
 
+    mpRenderer renderer = {};
+    memset(&renderer, 0, sizeof(mpRenderer));
+    renderer.LinkMemory(vulkanMemory, tempMemory);
+    renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
     renderer.LoadTextures(textures, textureCount);
     renderer.InitResources(core);
-
-    core.gui = mpGuiInitialise(textureCount, textureCount);
 
     //mpDistribute(core.region, mpSpawnTree, 2);
 
@@ -607,7 +604,7 @@ int main(int argc, char *argv[])
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f}, 0);
+            mpDrawAdjustedRect2D(core.gui, 50, 70, {1.0f, 1.0f, 1.0f, 1.0f}, 0);
             if(mpButton(core.gui, 1, {400, 400}, 1)){
                 // -> pause menu button clicked
                 // Doesn't seem to be working yet
@@ -615,8 +612,7 @@ int main(int argc, char *argv[])
         }
 
         mpGuiEnd(core.gui);
-        for(uint32_t i = 0; i < textureCount; i++)
-            renderer.RecreateGuiBuffer(core.gui.meshes[i], i);
+        renderer.RecreateGuiBuffers(core.gui);
 
         // Core :: Clamp rotation values
         if(core.camera.pitch > core.camera.pitchClamp)
@@ -688,6 +684,9 @@ int main(int argc, char *argv[])
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
+    // Renderer needs to clean up before memory is destroyed,
+    // hence a destructor doesn't work here
+    renderer.Cleanup();
     mpDestroyMemoryRegion(subRegionMemory);
     mpDestroyMemoryRegion(vulkanMemory);
     mpDestroyMemoryRegion(tempMemory);

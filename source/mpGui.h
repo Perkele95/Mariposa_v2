@@ -124,14 +124,14 @@ inline void mpDrawRect2D(mpGUI &gui, const mpRect2D &rect, const vec4 colour, ui
     mesh.vertices[mesh.vertexCount + 1] = mpGuiVertex{topRight, {0.0f, 0.0f}, colour};
     mesh.vertices[mesh.vertexCount + 2] = mpGuiVertex{bottomRight, {0.0f, 1.0f}, colour};
     mesh.vertices[mesh.vertexCount + 3] = mpGuiVertex{bottomLeft, {1.0f, 1.0f}, colour};
-    mesh.vertexCount += 4;
 
-    mesh.indices[mesh.indexCount]     = static_cast<uint16_t>(mesh.vertexCount + 0);
+    mesh.indices[mesh.indexCount]     = static_cast<uint16_t>(mesh.vertexCount);
     mesh.indices[mesh.indexCount + 1] = static_cast<uint16_t>(mesh.vertexCount + 1);
     mesh.indices[mesh.indexCount + 2] = static_cast<uint16_t>(mesh.vertexCount + 2);
-    mesh.indices[mesh.indexCount + 3] = static_cast<uint16_t>(mesh.vertexCount + 3);
-    mesh.indices[mesh.indexCount + 4] = static_cast<uint16_t>(mesh.vertexCount + 4);
-    mesh.indices[mesh.indexCount + 5] = static_cast<uint16_t>(mesh.vertexCount + 5);
+    mesh.indices[mesh.indexCount + 3] = static_cast<uint16_t>(mesh.vertexCount + 2);
+    mesh.indices[mesh.indexCount + 4] = static_cast<uint16_t>(mesh.vertexCount + 3);
+    mesh.indices[mesh.indexCount + 5] = static_cast<uint16_t>(mesh.vertexCount);
+    mesh.vertexCount += 4;
     mesh.indexCount += 6;
 }
 // NOTE: width and height range from 0 to 100%
