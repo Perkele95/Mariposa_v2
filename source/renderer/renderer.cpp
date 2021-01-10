@@ -12,10 +12,10 @@ void mpRenderer::LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion tempor
 
 void mpRenderer::LoadShaders(const mpCallbacks &callbacks)
 {
-    LoadShaderModule(callbacks, scene.vertShaderModule, "../assets/shaders/vert.spv");
-    LoadShaderModule(callbacks, scene.fragShaderModule, "../assets/shaders/vert.spv");
-    LoadShaderModule(callbacks, gui.vertShaderModule, "../assets/shaders/gui_vert.spv");
-    LoadShaderModule(callbacks, gui.vertShaderModule, "../assets/shaders/gui_frag.spv");
+    LoadShaderModule(callbacks, &scene.vertShaderModule, "../assets/shaders/vert.spv");
+    LoadShaderModule(callbacks, &scene.fragShaderModule, "../assets/shaders/frag.spv");
+    LoadShaderModule(callbacks, &gui.vertShaderModule, "../assets/shaders/gui_vert.spv");
+    LoadShaderModule(callbacks, &gui.fragShaderModule, "../assets/shaders/gui_frag.spv");
 }
 
 void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
@@ -150,6 +150,15 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
 
     vkGetDeviceQueue(device, graphicsQueueFamily, 0, &graphicsQueue);
     vkGetDeviceQueue(device, presentQueueFamily, 0, &presentQueue);
+
+    // Vulkan :: command pool
+    VkCommandPoolCreateInfo poolInfo = {};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = graphicsQueueFamily;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    error = vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool);
+    mp_assert(!error);
 }
 
 void mpRenderer::LoadTextures(const char *paths[], uint32_t count)
@@ -199,26 +208,17 @@ void mpRenderer::InitResources(mpCore &core)
     samplerLayoutBinding.pImmutableSamplers = nullptr;
 
     VkDescriptorSetLayoutBinding textureArrayBinding = {};
-    samplerLayoutBinding.binding = 1;
-    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    samplerLayoutBinding.descriptorCount = MP_MAX_TEXTURES;
-    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    samplerLayoutBinding.pImmutableSamplers = nullptr;
+    textureArrayBinding.binding = 1;
+    textureArrayBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    textureArrayBinding.descriptorCount = texture.count;
+    textureArrayBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    textureArrayBinding.pImmutableSamplers = nullptr;
 
     VkDescriptorSetLayoutBinding guiSetLayoutBindings[] = {samplerLayoutBinding, textureArrayBinding};
     layoutInfo.pBindings = guiSetLayoutBindings;
     layoutInfo.bindingCount = 2;
 
     error = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &gui.descriptorSetLayout);
-    mp_assert(!error);
-
-    // Vulkan :: command pool
-    VkCommandPoolCreateInfo poolInfo = {};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = graphicsQueueFamily;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
-    error = vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool);
     mp_assert(!error);
 
     // Vulkan :: query surface capabilities & formats
@@ -228,12 +228,14 @@ void mpRenderer::InitResources(mpCore &core)
     VkSurfaceFormatKHR *pSurfaceFormats = static_cast<VkSurfaceFormatKHR*>(mpAlloc(tempMemory, sizeof(VkSurfaceFormatKHR) * formatCount));
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, pSurfaceFormats);
 
+    surfaceFormat = pSurfaceFormats[0];
     for(uint32_t i = 0; i < formatCount; i++){
-        if(pSurfaceFormats[i].format == VK_FORMAT_R8G8B8A8_SRGB && pSurfaceFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR){
+        if(pSurfaceFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB && pSurfaceFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR){
             surfaceFormat = pSurfaceFormats[i];
             break;
         }
     }
+    swapchainFormat = surfaceFormat.format;
     // Vulkan :: query present modes
     uint32_t presentModeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &presentModeCount, nullptr);
@@ -255,12 +257,15 @@ void mpRenderer::InitResources(mpCore &core)
     // Vulkan :: Initialise swapchain
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surfaceCapabilities);
     if(surfaceCapabilities.currentExtent.width == 0xFFFFFFFF){
-        swapchainExtent = {
+        VkExtent2D extent = {
             static_cast<uint32_t>(core.windowInfo.width),
             static_cast<uint32_t>(core.windowInfo.height)
         };
-        swapchainExtent.width = uint32Clamp(swapchainExtent.width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
-        swapchainExtent.height = uint32Clamp(swapchainExtent.height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
+        swapchainExtent.width = uint32Clamp(extent.width, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width);
+        swapchainExtent.height = uint32Clamp(extent.height, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height);
+    }
+    else{
+        swapchainExtent = surfaceCapabilities.currentExtent;
     }
 
     uint32_t minImageCount = surfaceCapabilities.minImageCount + 1;
@@ -538,25 +543,65 @@ void mpRenderer::Update(mpCore &core)
     currentFrame = (currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 }
 
-void mpRenderer::Cleanup()
+mpRenderer::~mpRenderer()
 {
-    //
+    vkDeviceWaitIdle(device);
+    CleanUpSwapchain();
+
+    vkDestroyShaderModule(device, scene.vertShaderModule, nullptr);
+    vkDestroyShaderModule(device, scene.fragShaderModule, nullptr);
+    vkDestroyShaderModule(device, gui.vertShaderModule, nullptr);
+    vkDestroyShaderModule(device, gui.fragShaderModule, nullptr);
+
+    vkDestroyDescriptorSetLayout(device, gui.descriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, scene.descriptorSetLayout, nullptr);
+
+    vkDestroySampler(device, texture.sampler, nullptr);
+    for(uint32_t i = 0; i < texture.count; i++){
+        vkDestroyImageView(device, texture.pImageViews[i], nullptr);
+        vkDestroyImage(device, texture.pImages[i], nullptr);
+        vkFreeMemory(device, texture.pImageMemories[i], nullptr);
+
+        vkDestroyBuffer(device, texture.pVertexbuffers[i], nullptr);
+        vkDestroyBuffer(device, texture.pIndexbuffers[i], nullptr);
+        vkFreeMemory(device, texture.pVertexbufferMemories[i], nullptr);
+        vkFreeMemory(device, texture.pIndexbufferMemories[i], nullptr);
+    }
+    for(int32_t z = 0; z < MP_REGION_SIZE; z++){
+        for(int32_t y = 0; y < MP_REGION_SIZE; y++){
+            for(int32_t x = 0; x < MP_REGION_SIZE; x++){
+                vkDestroyBuffer(device, scene.indexbuffers[x][y][z], nullptr);
+                vkFreeMemory(device, scene.indexbufferMemories[x][y][z], nullptr);
+                vkDestroyBuffer(device, scene.vertexbuffers[x][y][z], nullptr);
+                vkFreeMemory(device, scene.vertexbufferMemories[x][y][z], nullptr);
+            }
+        }
+    }
+    for(uint32_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++) {
+        vkDestroySemaphore(device, imageAvailableSPs[i], nullptr);
+        vkDestroySemaphore(device, renderFinishedSPs[i], nullptr);
+        vkDestroyFence(device, inFlightFences[i], nullptr);
+    }
+    vkDestroyCommandPool(device, commandPool, nullptr);
+    vkDestroyDevice(device, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    vkDestroyInstance(instance, nullptr);
 }
 
 // private methods
-void mpRenderer::LoadShaderModule(const mpCallbacks &callbacks, VkShaderModule &module, const char *path)
+void mpRenderer::LoadShaderModule(const mpCallbacks &callbacks, VkShaderModule *pModule, const char *path)
 {
     mpFile shader = callbacks.mpReadFile(path);
     VkShaderModuleCreateInfo shaderModuleInfo = {};
     shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shaderModuleInfo.codeSize = shader.size;
     shaderModuleInfo.pCode = (const uint32_t*)shader.handle;
-    VkResult error = vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &module);
+    VkResult error = vkCreateShaderModule(device, &shaderModuleInfo, nullptr, pModule);
     mp_assert(!error);
     callbacks.mpCloseFile(&shader);
 }
 
-void mpRenderer::PrepareTextureImage(VkImage image, VkDeviceMemory imageMemory, const char *filePath)
+void mpRenderer::PrepareTextureImage(VkImage &image, VkDeviceMemory &imageMemory, const char *filePath)
 {
     int32_t texWidth, texHeight, texChannels;
     stbi_uc *pixels = stbi_load(filePath, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -1009,7 +1054,7 @@ void mpRenderer::PrepareGuiPipeline()
 
     VkPushConstantRange pushConstantRange = {};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pushConstantRange.size = 4;//sizeof(int)
+    pushConstantRange.size = sizeof(int32_t);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1055,6 +1100,7 @@ inline static uint32_t FindMemoryType(VkPhysicalDevice physDevice, uint32_t type
 VkImage mpRenderer::CreateImage(VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
 {
     VkImageCreateInfo imageInfo = {};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
     imageInfo.extent = VkExtent3D{extent.width, extent.height, 1};
     imageInfo.format = format;
@@ -1096,7 +1142,7 @@ void mpRenderer::PrepareDepthResources()
 void mpRenderer::PrepareFramebuffers()
 {
     for(uint32_t i = 0; i < swapchainImageCount; i++){
-        VkImageView attachments[] = {pSwapchainImageViews[i] , depth.imageView};
+        VkImageView attachments[] = {pSwapchainImageViews[i], depth.imageView};
         constexpr uint32_t attachmentsSize = arraysize(attachments);
 
         VkFramebufferCreateInfo framebufferInfo = {};
@@ -1202,18 +1248,28 @@ void mpRenderer::PrepareUniformbuffers()
 
 void mpRenderer::PrepareDescriptorPool()
 {
-    VkDescriptorPoolSize poolSizes[2] = {};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = swapchainImageCount;
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
-    poolSizes[1].descriptorCount = swapchainImageCount;
+    VkDescriptorPoolSize scenePoolSize = {};
+    scenePoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    scenePoolSize.descriptorCount = swapchainImageCount;
+    VkDescriptorPoolSize guiPoolSize = {};
+    guiPoolSize.type = VK_DESCRIPTOR_TYPE_SAMPLER;
+    guiPoolSize.descriptorCount = swapchainImageCount;
+    VkDescriptorPoolSize texturesPoolSize = {};
+    texturesPoolSize.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    texturesPoolSize.descriptorCount = texture.count * swapchainImageCount;
 
-    constexpr size_t poolSizeCount = arraysize(poolSizes);
+    VkDescriptorPoolSize poolSizes[] = {scenePoolSize, guiPoolSize, texturesPoolSize};
+    constexpr uint32_t poolSizeCount = arraysize(poolSizes);
+
+    uint32_t maxSets = 0;
+    for(uint32_t i = 0; i < poolSizeCount; i++)
+        maxSets += poolSizes[i].descriptorCount;
+
     VkDescriptorPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = poolSizeCount;
     poolInfo.pPoolSizes = poolSizes;
-    poolInfo.maxSets = swapchainImageCount * poolSizeCount;
+    poolInfo.maxSets = maxSets;
 
     VkResult error = vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool);
     mp_assert(!error);
@@ -1275,14 +1331,28 @@ void mpRenderer::PrepareGuiDescriptorSets()
     }
     // Pre swapchain image
     for(uint32_t i = 0; i < swapchainImageCount; i++){
-        VkWriteDescriptorSet descriptorWrite = {};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = gui.pDescriptorSets[i];
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        descriptorWrite.descriptorCount = texture.count;
-        descriptorWrite.pImageInfo = imageInfos;
+        VkDescriptorImageInfo samplerInfo = {};
+        samplerInfo.sampler = texture.sampler;
 
-        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+        VkWriteDescriptorSet samplerWrite = {};
+        samplerWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        samplerWrite.dstSet = gui.pDescriptorSets[i];
+        samplerWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        samplerWrite.descriptorCount = 1;
+        samplerWrite.pImageInfo = &samplerInfo;
+        samplerWrite.dstBinding = 0;
+
+        VkWriteDescriptorSet textureArrayWrite = {};
+        textureArrayWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        textureArrayWrite.dstSet = gui.pDescriptorSets[i];
+        textureArrayWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        textureArrayWrite.descriptorCount = texture.count;
+        textureArrayWrite.pImageInfo = imageInfos;
+        textureArrayWrite.dstBinding = 1;
+
+        VkWriteDescriptorSet descriptorWrites[] = {samplerWrite, textureArrayWrite};
+        constexpr uint32_t descriptorWriteCount = arraysize(descriptorWrites);
+        vkUpdateDescriptorSets(device, descriptorWriteCount, descriptorWrites, 0, nullptr);
     }
 }
 

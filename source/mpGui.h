@@ -60,16 +60,19 @@ constexpr int32_t MPGUI_ITEM_UNAVAILABLE = -1;
 
 inline mpGUI mpGuiInitialise(uint32_t maxElementsPerTexture, uint32_t textureCount)
 {
-    const size_t verticesSize = sizeof(mpGuiVertex) * maxElementsPerTexture * 4;
-    const size_t indicesSize = sizeof(uint16_t) * maxElementsPerTexture * 6;
+    const size_t vertexAllocSize = sizeof(mpGuiVertex) * 4 * maxElementsPerTexture;
+    const size_t indexAllocSize = sizeof(uint16_t) * 6 * maxElementsPerTexture;
+    const size_t meshHeaderSize = sizeof(mpGuiMesh) * textureCount;
+    const size_t regionAllocSize = (vertexAllocSize + indexAllocSize) * textureCount + meshHeaderSize;
+
     mpGUI gui = {};
     memset(&gui, 0, sizeof(mpGUI));
-    gui.memory = mpCreateMemoryRegion(verticesSize + indicesSize);
+    gui.memory = mpCreateMemoryRegion(regionAllocSize);
     gui.meshCount = textureCount;
-    gui.meshes = static_cast<mpGuiMesh*>(mpAlloc(gui.memory, sizeof(mpGuiMesh) * textureCount));
+    gui.meshes = static_cast<mpGuiMesh*>(mpAlloc(gui.memory, meshHeaderSize));
     for(uint32_t i = 0; i < textureCount; i++){
-        gui.meshes[i].vertices = static_cast<mpGuiVertex*>(mpAlloc(gui.memory, verticesSize));
-        gui.meshes[i].indices = static_cast<uint16_t*>(mpAlloc(gui.memory, indicesSize));
+        gui.meshes[i].vertices = static_cast<mpGuiVertex*>(mpAlloc(gui.memory, vertexAllocSize));
+        gui.meshes[i].indices = static_cast<uint16_t*>(mpAlloc(gui.memory, indexAllocSize));
     }
     gui.maxElementsPerTexture = maxElementsPerTexture;
 
@@ -79,14 +82,16 @@ inline mpGUI mpGuiInitialise(uint32_t maxElementsPerTexture, uint32_t textureCou
 inline void mpGuiBegin(mpGUI &gui, mpPoint extent, mpPoint mousePos, bool32 mouseButtonDown)
 {
     for(uint32_t i = 0; i < gui.meshCount; i++){
-        gui.meshes[i].vertexCount = 0;
-        gui.meshes[i].indexCount = 0;
+        mpGuiMesh &mesh = gui.meshes[i];
+        mesh.vertexCount = 0;
+        mesh.indexCount = 0;
+        memset(mesh.vertices, 0, sizeof(mpGuiVertex) * mesh.vertexCount);
+        memset(mesh.indices, 0, sizeof(uint16_t) * mesh.indexCount);
     }
     gui.extent = extent;
     gui.state.hotItem = 0;
     gui.state.mousePosition = mousePos;
     gui.state.mouseButtonDown = mouseButtonDown;
-    mpResetMemoryRegion(gui.memory);
 }
 
 inline void mpGuiEnd(mpGUI &gui)

@@ -25,8 +25,8 @@ constexpr uint32_t MAX_IMAGES_IN_FLIGHT = 2;
 /*
  *  Order of execution (not strictly enforced, but wrong order does not work):
  *  1 - LinkMemory
- *  2 - LoadShaders
- *  3 - InitDevice
+ *  2 - InitDevice
+ *  3 - LoadShaders
  *  4 - LoadTextures
  *  5 - InitResources
 */
@@ -34,14 +34,15 @@ struct mpRenderer
 {
     // API
     void LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion temporaryMemory);
-    void LoadShaders(const mpCallbacks &callbacks);
     void InitDevice(mpCore &core, bool32 enableValidation);
+    void LoadShaders(const mpCallbacks &callbacks);
     void LoadTextures(const char *paths[], uint32_t count);
     void InitResources(mpCore &core);
     void RecreateGuiBuffer(mpGuiMesh &mesh, uint32_t index);
     void RecreateSceneBuffer(mpMesh &mesh, uint32_t x, uint32_t y, uint32_t z);
     void Update(mpCore &core);
-    void Cleanup();
+
+    ~mpRenderer();
 private:
     // MP memory
     mpMemoryRegion mpVkMemory;
@@ -132,8 +133,8 @@ private:
     VkFence inFlightFences[MAX_IMAGES_IN_FLIGHT];
 
     // Private methods
-    void LoadShaderModule(const mpCallbacks &callbacks, VkShaderModule &module, const char *path);
-    void PrepareTextureImage(VkImage image, VkDeviceMemory imageMemory, const char *filePath);
+    void LoadShaderModule(const mpCallbacks &callbacks, VkShaderModule *pModule, const char *path);
+    void PrepareTextureImage(VkImage &image, VkDeviceMemory &imageMemory, const char *filePath);
     void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
     bool32 CheckPhysicalDeviceSuitability(VkPhysicalDevice &checkedPhysDevice);
     VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);

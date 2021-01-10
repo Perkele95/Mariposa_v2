@@ -34,12 +34,13 @@ inline void mpResetMemoryRegion(mpMemoryRegion region)
     region->contentSize = 0;
     memset(region->data, 0, region->totalSize);
 }
-// TODO: make alloc safe
+
 inline void *mpAlloc(mpMemoryRegion region, size_t size)
 {
     void *result = nullptr;
     if(region->contentSize + size > region->totalSize){
-        MP_LOG_ERROR("MEMORY ERROR: Allocation request denied, cannot allocate past region");
+        MP_PUTS_ERROR("MEMORY ERROR: Allocation request denied, cannot allocate past region");
+        mp_assert(false);
     }
     else{
         result = region->data;

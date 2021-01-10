@@ -544,8 +544,8 @@ int main(int argc, char *argv[])
     mpRenderer renderer = {};
     memset(&renderer, 0, sizeof(mpRenderer));
     renderer.LinkMemory(vulkanMemory, tempMemory);
-    renderer.LoadShaders(core.callbacks);
     renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
+    renderer.LoadShaders(core.callbacks);
 
     const char *textures[] = {
         "../assets/strings/test.png",
@@ -608,7 +608,7 @@ int main(int argc, char *argv[])
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
             mpDrawAdjustedRect2D(core.gui, 50, 70, {0.2f, 0.2f, 0.2f, 0.7f}, 0);
-            if(mpButton(core.gui, 1, {400, 400}, 0)){
+            if(mpButton(core.gui, 1, {400, 400}, 1)){
                 // -> pause menu button clicked
                 // Doesn't seem to be working yet
             }
@@ -688,7 +688,6 @@ int main(int argc, char *argv[])
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
-    renderer.Cleanup();
     mpDestroyMemoryRegion(subRegionMemory);
     mpDestroyMemoryRegion(vulkanMemory);
     mpDestroyMemoryRegion(tempMemory);
