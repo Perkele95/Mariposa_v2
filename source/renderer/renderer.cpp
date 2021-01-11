@@ -431,7 +431,7 @@ void mpRenderer::RecreateGuiBuffers(mpGUI &mpgui)
     {
         mpGuiMesh &mesh = mpgui.meshes[i];
         if(mesh.vertexCount == 0)
-            return;
+            continue;
 
         constexpr VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         constexpr VkBufferUsageFlags iUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;

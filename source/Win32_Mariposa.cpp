@@ -240,7 +240,8 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
         {
             case WM_MOUSEMOVE:
             {
-
+                pReceiver->mouseX = message.lParam & 0x0000FFFF;
+                pReceiver->mouseY = static_cast<int32_t>(static_cast<uint32_t>(message.lParam) >> 16);
             } break;
             case WM_LBUTTONDOWN:
             {

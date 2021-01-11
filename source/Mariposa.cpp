@@ -182,7 +182,9 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
 {
     constexpr float noiseOffset = 40.0f;
     constexpr float noiseHeight = 8.0f;
-    constexpr float granularity = 0.06f;
+    constexpr float granularity = 0.03f;
+    constexpr float colourGranularity = 0.2f;
+    constexpr float colourNoiseHeight = 60.0f;
     mpVoxelSubRegion subRegion = {};
     subRegion.position = subRegionPosition;
 
@@ -192,20 +194,20 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
                 const vec3 globalPos = subRegionPosition + mpVec3IntToVec3(vec3Int{x, y, z});
                 const float noise = noiseHeight * perlin(globalPos.x * granularity, globalPos.y * granularity);
                 const float surfaceThreshold = noiseOffset + noise;
-                float moistureLevel = (noiseOffset + noise * 3.5f) * 4.0f;
-                if(moistureLevel > 255.0f)
-                    moistureLevel = 250.0f;
 
                 if(globalPos.z > surfaceThreshold)
                     continue;
 
+                const float colourNoise =  1.0f + perlin(globalPos.x * colourGranularity, globalPos.y * colourGranularity);
+                const uint8_t colour = static_cast<uint8_t>(colourNoise * colourNoiseHeight);
+
+                subRegion.flags |= MP_SUBREG_FLAG_ACTIVE;
                 mpVoxel &voxel = subRegion.voxels[x][y][z];
                 voxel.flags = MP_VOXEL_FLAG_ACTIVE;
-                voxel.colour.r = 0x20;
-                voxel.colour.g = static_cast<uint8_t>(moistureLevel);
-                voxel.colour.b = 0x4A;
-                voxel.colour.a = 0xFF;
-                subRegion.flags |= MP_SUBREG_FLAG_ACTIVE;
+                voxel.colour.r = 212;
+                voxel.colour.g = colour + 40;
+                voxel.colour.b = 40;
+                voxel.colour.a = 255;
             }
         }
     }
@@ -346,11 +348,11 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
     mpRayCastHitInfo hitInfo;
     memset(&hitInfo, 0, sizeof(mpRayCastHitInfo));
     vec3 rayCastHit = origin + direction;
-    for(uint32_t i = 0; i < 20; i++){
+    for(uint32_t i = 0; i < 40; i++){
         rayCastHit += direction;
 
         mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, rayCastHit);
-        if(subRegion != nullptr){
+        if(subRegion != nullptr && subRegion->flags & MP_SUBREG_FLAG_ACTIVE){
             const vec3 localPos = rayCastHit - subRegion->position;
             vec3Int index = mpVec3ToVec3Int(localPos);
 
@@ -406,17 +408,6 @@ inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegi
         }
     }
 }
-
-static uint32_t s_colourKey = 0;
-constexpr uint32_t colourTable[] = {
-    0xDDDD00FF,
-    0xDDFFDDFF,
-    0xFFDDDDFF,
-    0xDD55DDFF,
-    0x5555DDFF,
-    0xDDDD55FF,
-    0xDD5555FF,
-};
 // TODO: optimise
 static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
@@ -442,20 +433,16 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                         const vec3Int index = mpVec3ToVec3Int(localHit);
                         mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
                         result.flags = MP_VOXEL_FLAG_ACTIVE;
-                        result.colour.rgba = colourTable[s_colourKey];
-                        result.colour.r -= static_cast<uint8_t>(z + zOffset) * 3;
-                        result.colour.g -= static_cast<uint8_t>(z + zOffset) * 3;
-                        result.colour.b -= static_cast<uint8_t>(z + zOffset) * 3;
-                        subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
+                        result.colour.rgba = 0x888888FF;
+                        result.colour.r -= static_cast<uint8_t>(z + zOffset) * 8;
+                        result.colour.g -= static_cast<uint8_t>(z + zOffset) * 8;
+                        result.colour.b -= static_cast<uint8_t>(z + zOffset) * 8;
+                        subRegion->flags |= MP_SUBREG_FLAG_DIRTY | MP_SUBREG_FLAG_ACTIVE;
                     }
                 }
             }
         }
-    }// temporary colour selection
-    if(s_colourKey == 6)
-        s_colourKey = 0;
-    else
-        s_colourKey++;
+    }
 }
 
 inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
@@ -562,7 +549,7 @@ int main(int argc, char *argv[])
         "../assets/textures/settings.png",
     };
     constexpr uint32_t textureCount = arraysize(textures);
-    core.gui = mpGuiInitialise(textureCount, textureCount);
+    core.gui = mpGuiInitialise(5, textureCount);
 
     mpRenderer renderer = {};
     memset(&renderer, 0, sizeof(mpRenderer));
@@ -616,15 +603,16 @@ int main(int argc, char *argv[])
         }
         // CORE :: GUI
         const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
+        const mpPoint screenCentre = {extent.x / 2, extent.y / 2};
         const mpPoint mousePos = {core.eventReceiver.mouseX, core.eventReceiver.mouseY};
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            mpDrawAdjustedRect2D(core.gui, 50, 70, {1.0f, 1.0f, 1.0f, 0.4f}, 0);
-            if(mpButton(core.gui, 1, {400, 400}, 1)){
-                // -> pause menu button clicked
-                // Doesn't seem to be working yet
-                puts("Button pressed");
+            if(mpButton(core.gui, 0, {screenCentre.x, screenCentre.y - 50}, 1)){
+                // -> Resume clicked
+            }
+            if(mpButton(core.gui, 1, {screenCentre.x, screenCentre.y + 50}, 2)){
+                // -> Settings clicked
             }
         }
 
