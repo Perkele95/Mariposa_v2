@@ -270,7 +270,7 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
     }
 }
 
-static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryRegion tempMemory)
+static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
 {
     mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAlloc(regionMemory, sizeof(mpVoxelRegion)));
     // Set active flag on voxels
@@ -303,19 +303,25 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory, mpMemoryR
             }
         }
     }
-    // Generate meshes
+    return region;
+}
+
+static void mpGenerateMeshes(mpVoxelRegion *region, mpMemoryRegion tempMemory)
+{
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){
             for(int32_t x = 0; x < MP_REGION_SIZE; x++){
                 // Set draw flags
                 mpVoxelSubRegion &subRegion = region->subRegions[x][y][z];
+                if((subRegion.flags & MP_SUBREG_FLAG_ACTIVE) == false)
+                    continue;
+
                 mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
                 // Create mesh
                 mpCreateMesh(subRegion, region->meshArray[x][y][z], tempMemory);
             }
         }
     }
-    return region;
 }
 
 static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &eventReceiver)
@@ -526,8 +532,7 @@ int main(int argc, char *argv[])
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
-    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION;
-    core.renderFlags |= MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
+    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
     core.gameState = MP_GAMESTATE_ACTIVE;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
@@ -538,12 +543,23 @@ int main(int argc, char *argv[])
     mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
     mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
 
-    constexpr uint32_t subRegionCount = arraysize3D(mpVoxelRegion::subRegions);
-    core.region = mpGenerateWorldData(subRegionMemory, tempMemory);
-
+    if(core.renderFlags & MP_RENDER_FLAG_REGENERATE_WORLD){
+        core.region = mpGenerateWorldData(subRegionMemory);
+        mpFile worldGen = {};
+        worldGen.handle = core.region;
+        worldGen.size = sizeof(mpVoxelRegion);
+        core.callbacks.mpWriteFile("../assets/worldGen.mpasset", &worldGen);
+    }
+    else{
+        mpFile worldGen = core.callbacks.mpReadFile("../assets/worldGen.mpasset");
+        core.region = static_cast<mpVoxelRegion*>(worldGen.handle);
+    }
+    mpGenerateMeshes(core.region, tempMemory);
+    // TODO: string type
     const char *textures[] = {
-        "../assets/strings/test.png",
-        "../assets/strings/resume.png",
+        "../assets/textures/white_pixel.png",
+        "../assets/textures/resume.png",
+        "../assets/textures/settings.png",
     };
     constexpr uint32_t textureCount = arraysize(textures);
     core.gui = mpGuiInitialise(textureCount, textureCount);
@@ -604,10 +620,11 @@ int main(int argc, char *argv[])
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            mpDrawAdjustedRect2D(core.gui, 50, 70, {1.0f, 1.0f, 1.0f, 1.0f}, 0);
+            mpDrawAdjustedRect2D(core.gui, 50, 70, {1.0f, 1.0f, 1.0f, 0.4f}, 0);
             if(mpButton(core.gui, 1, {400, 400}, 1)){
                 // -> pause menu button clicked
                 // Doesn't seem to be working yet
+                puts("Button pressed");
             }
         }
 

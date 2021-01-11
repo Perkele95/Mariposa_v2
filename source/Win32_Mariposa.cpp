@@ -57,7 +57,7 @@ void CreateWin32Surface(VkInstance instance, VkSurfaceKHR *surface)
     mp_assert(!error);
 }
 
-void Win32CloseFile(mpFile *file)
+void Win32FreeFileMemory(mpFile *file)
 {
     free(file->handle);
 }
@@ -133,7 +133,7 @@ mpCallbacks PlatformGetCallbacks()
 {
     mpCallbacks callbacks = {};
     callbacks.GetSurface = CreateWin32Surface;
-    callbacks.mpCloseFile = Win32CloseFile;
+    callbacks.mpFreeFileMemory = Win32FreeFileMemory;
     callbacks.mpReadFile = Win32ReadFile;
     callbacks.mpWriteFile = Win32WriteFile;
     return callbacks;

@@ -118,12 +118,20 @@ inline void mpDrawRect2D(mpGUI &gui, const mpRect2D &rect, const vec4 colour, ui
     const vec2 bottomRight = mpScreenToVertexSpace(rect.bottomRight, gui.extent);
     const vec2 bottomLeft = mpScreenToVertexSpace(mpPoint{rect.topLeft.x, rect.bottomRight.y}, gui.extent);
 
+    // Texture coordinates
+    constexpr vec2 uvs[] = {
+        {0.0f, 0.0f},
+        {1.0f, 0.0f},
+        {1.0f, 1.0f},
+        {0.0f, 1.0f}
+    };
+
     // Push data into gui memory
     mpGuiMesh &mesh = gui.meshes[textureIndex];
-    mesh.vertices[mesh.vertexCount]     = mpGuiVertex{topLeft, {1.0f, 0.0f}, colour};
-    mesh.vertices[mesh.vertexCount + 1] = mpGuiVertex{topRight, {0.0f, 0.0f}, colour};
-    mesh.vertices[mesh.vertexCount + 2] = mpGuiVertex{bottomRight, {0.0f, 1.0f}, colour};
-    mesh.vertices[mesh.vertexCount + 3] = mpGuiVertex{bottomLeft, {1.0f, 1.0f}, colour};
+    mesh.vertices[mesh.vertexCount]     = mpGuiVertex{topLeft,     uvs[0], colour};
+    mesh.vertices[mesh.vertexCount + 1] = mpGuiVertex{topRight,    uvs[1], colour};
+    mesh.vertices[mesh.vertexCount + 2] = mpGuiVertex{bottomRight, uvs[2], colour};
+    mesh.vertices[mesh.vertexCount + 3] = mpGuiVertex{bottomLeft,  uvs[3], colour};
 
     mesh.indices[mesh.indexCount]     = static_cast<uint16_t>(mesh.vertexCount);
     mesh.indices[mesh.indexCount + 1] = static_cast<uint16_t>(mesh.vertexCount + 1);

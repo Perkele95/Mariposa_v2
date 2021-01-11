@@ -65,7 +65,7 @@ struct mpCallbacks
 {
     void (*GetSurface)(VkInstance instance, VkSurfaceKHR *surface);
     // FILE IO
-    void (*mpCloseFile)(mpFile *file);
+    void (*mpFreeFileMemory)(mpFile *file);
     mpFile (*mpReadFile)(const char *filename);
     bool32 (*mpWriteFile)(const char *filename, mpFile *file);
 };
@@ -162,6 +162,7 @@ enum mpRenderFlags
     MP_RENDER_FLAG_RESERVED              = 0x0002,
     MP_RENDER_FLAG_GUI_UPDATED           = 0x0004,
     MP_RENDER_FLAG_GENERATE_PERMUTATIONS = 0x0008,
+    MP_RENDER_FLAG_REGENERATE_WORLD      = 0x0010,
 };
 
 struct mpCamera

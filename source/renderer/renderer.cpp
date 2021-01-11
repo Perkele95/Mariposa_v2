@@ -619,7 +619,7 @@ void mpRenderer::LoadShaderModule(const mpCallbacks &callbacks, VkShaderModule *
     shaderModuleInfo.pCode = (const uint32_t*)shader.handle;
     VkResult error = vkCreateShaderModule(device, &shaderModuleInfo, nullptr, pModule);
     mp_assert(!error);
-    callbacks.mpCloseFile(&shader);
+    callbacks.mpFreeFileMemory(&shader);
 }
 
 void mpRenderer::PrepareTextureImage(VkImage &image, VkDeviceMemory &imageMemory, const char *filePath)

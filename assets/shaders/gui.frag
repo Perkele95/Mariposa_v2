@@ -16,5 +16,5 @@ layout(location = 0) out vec4 outColour;
 
 void main()
 {
-	outColour = texture(sampler2D(textureArray[pushC.imageIndex], textureSampler), fragTexCoord);
+	outColour = texture(sampler2D(textureArray[pushC.imageIndex], textureSampler), fragTexCoord) * fragColour;
 }

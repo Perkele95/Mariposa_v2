@@ -1,13 +1,15 @@
+# Folders
 bin
-strings
+textures
 1.2.162.0
 stb_image
 scripts
-cmd.exe.lnk
 
+# File formats
 *.vscode
 *.suo
 *.db
 *.ipch
 *.spv
 *.bat
+*.mpasset
