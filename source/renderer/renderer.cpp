@@ -629,7 +629,8 @@ void mpRenderer::PrepareTextureImage(VkImage &image, VkDeviceMemory &imageMemory
 
     VkDeviceSize imageSize = texWidth * texHeight * 4;
     if(!pixels) {
-        MP_LOG_WARN("Failed to load image from file %s", filePath);
+        MP_LOG_WARN("Failed to load image from file %s\n", filePath);
+        mp_assert(false)
     }
     VkBuffer stagingbuffer;
     VkDeviceMemory stagingbufferMemory;

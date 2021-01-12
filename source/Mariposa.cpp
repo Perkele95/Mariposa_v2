@@ -198,16 +198,35 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
                 if(globalPos.z > surfaceThreshold)
                     continue;
 
-                const float colourNoise =  1.0f + perlin(globalPos.x * colourGranularity, globalPos.y * colourGranularity);
-                const uint8_t colour = static_cast<uint8_t>(colourNoise * colourNoiseHeight);
+                const float xy = yzNoise(globalPos * 0.025f);
+                if(xy > 0.12f)
+                    continue;
 
                 subRegion.flags |= MP_SUBREG_FLAG_ACTIVE;
                 mpVoxel &voxel = subRegion.voxels[x][y][z];
                 voxel.flags = MP_VOXEL_FLAG_ACTIVE;
-                voxel.colour.r = 212;
-                voxel.colour.g = colour + 40;
-                voxel.colour.b = 40;
-                voxel.colour.a = 255;
+
+                if(xy < 0.07f){
+                    // high
+                    voxel.colour.r = 230;
+                    voxel.colour.g = 230;
+                    voxel.colour.b = 230;
+                    voxel.colour.a = 255;
+                }
+                else if(xy < 0.105f){
+                    // mid
+                    voxel.colour.r = 40;
+                    voxel.colour.g = 75;
+                    voxel.colour.b = 65;
+                    voxel.colour.a = 255;
+                }
+                else{
+                    // low
+                    voxel.colour.r = 35;
+                    voxel.colour.g = 40;
+                    voxel.colour.b = 40;
+                    voxel.colour.a = 255;
+                }
             }
         }
     }
@@ -332,19 +351,19 @@ static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &even
         MP_KEY_UP, MP_KEY_DOWN,
         MP_KEY_LEFT, MP_KEY_RIGHT,
         MP_KEY_W, MP_KEY_S,
-        MP_KEY_A, MP_KEY_D, MP_KEY_E
+        MP_KEY_A, MP_KEY_D,
+        MP_KEY_E,
     };
     constexpr uint32_t listSize = arraysize(keyList);
     for(uint32_t key = 0; key < listSize; key++){
-        if(eventReceiver.keyPressedEvents & keyList[key])
-            core.continuousEvents |= keyList[key];
-        else if(eventReceiver.keyReleasedEvents & keyList[key])
-            core.continuousEvents &= ~keyList[key];
+        core.continuousEvents |= (eventReceiver.keyPressedEvents & keyList[key]);
+        core.continuousEvents &= ~(eventReceiver.keyReleasedEvents & keyList[key]);
     }
 }
 
-static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
+static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t depth = 0)
 {
+    uint32_t currentDepth = 0;
     mpRayCastHitInfo hitInfo;
     memset(&hitInfo, 0, sizeof(mpRayCastHitInfo));
     vec3 rayCastHit = origin + direction;
@@ -356,10 +375,16 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
             const vec3 localPos = rayCastHit - subRegion->position;
             vec3Int index = mpVec3ToVec3Int(localPos);
 
-            if(subRegion->voxels[index.x][index.y][index.z].flags & MP_VOXEL_FLAG_ACTIVE){
-                hitInfo.position = rayCastHit;
-                hitInfo.voxel = &subRegion->voxels[index.x][index.y][index.z];
-                break;
+            mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
+            if(voxel.flags & MP_VOXEL_FLAG_ACTIVE){
+                if(currentDepth == depth){
+                    hitInfo.position = rayCastHit;
+                    hitInfo.voxel = &subRegion->voxels[index.x][index.y][index.z];
+                    break;
+                }
+                else{
+                    currentDepth++;
+                }
             }
         }
     }
@@ -411,7 +436,7 @@ inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegi
 // TODO: optimise
 static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
-    const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
+    const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction, 4);
     if(rayCastHit.voxel == nullptr)
         return;
 
@@ -431,12 +456,17 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
 
                     if(vec3Length(target - rayCastHit.position) < radius){
                         const vec3Int index = mpVec3ToVec3Int(localHit);
-                        mpVoxel &result = subRegion->voxels[index.x][index.y][index.z];
-                        result.flags = MP_VOXEL_FLAG_ACTIVE;
-                        result.colour.rgba = 0x888888FF;
-                        result.colour.r -= static_cast<uint8_t>(z + zOffset) * 8;
-                        result.colour.g -= static_cast<uint8_t>(z + zOffset) * 8;
-                        result.colour.b -= static_cast<uint8_t>(z + zOffset) * 8;
+                        mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
+                        if(voxel.flags & MP_VOXEL_FLAG_ACTIVE)
+                            continue;
+
+                        voxel.flags = MP_VOXEL_FLAG_ACTIVE;
+                        voxel.colour.rgba = 0x222222FF;
+
+                        const uint8_t colourIncrement = static_cast<uint8_t>(z + zOffset) * 12 + mpRandomUint8();
+                        voxel.colour.r += colourIncrement;
+                        voxel.colour.g += colourIncrement;
+                        voxel.colour.b += colourIncrement;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY | MP_SUBREG_FLAG_ACTIVE;
                     }
                 }
@@ -488,7 +518,7 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
         if(voxelEx.flags & MP_VOXEL_FLAG_ACTIVE){
             if(voxel.flags & MP_VOXEL_FLAG_ACTIVE){
                 // Entity is inside ground
-                entity.position.z += 0.1f;
+                entity.position.z += 0.15f;
             }
             else{
                 // Entity is on ground
@@ -519,7 +549,7 @@ int main(int argc, char *argv[])
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
-    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
+    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;// | MP_RENDER_FLAG_REGENERATE_WORLD;
     core.gameState = MP_GAMESTATE_ACTIVE;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
@@ -546,7 +576,7 @@ int main(int argc, char *argv[])
     const char *textures[] = {
         "../assets/textures/white_pixel.png",
         "../assets/textures/resume.png",
-        "../assets/textures/settings.png",
+        "../assets/textures/quit.png",
     };
     constexpr uint32_t textureCount = arraysize(textures);
     core.gui = mpGuiInitialise(5, textureCount);
@@ -608,11 +638,15 @@ int main(int argc, char *argv[])
         mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
-            if(mpButton(core.gui, 0, {screenCentre.x, screenCentre.y - 50}, 1)){
-                // -> Resume clicked
+            const int32_t btnOffsetY = screenCentre.y / 15;
+            if(mpButton(core.gui, 0, {screenCentre.x, screenCentre.y - btnOffsetY}, 1)){
+                // -> Resume
+                core.gameState = MP_GAMESTATE_ACTIVE;
             }
-            if(mpButton(core.gui, 1, {screenCentre.x, screenCentre.y + 50}, 2)){
-                // -> Settings clicked
+            if(mpButton(core.gui, 1, {screenCentre.x, screenCentre.y + btnOffsetY}, 2)){
+                // -> Quit
+                core.windowInfo.running = false;
+                break;
             }
         }
 

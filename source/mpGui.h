@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mp_maths.h"
+#include "mp_maths.hpp"
 #include "memory.h"
 
 typedef int32_t bool32;
@@ -182,9 +182,9 @@ inline bool32 mpButton(mpGUI &gui, int32_t id, mpPoint centre, uint32_t textureI
     vec4 buttonColour = {};
     if (gui.state.hotItem == id){
         if (gui.state.activeItem == id)
-            buttonColour = {1.0f, 1.0f, 1.0f, 0.4f}; // Button is 'hot' & 'active'
+            buttonColour = {0.1f, 0.1f, 0.1f, 1.0f}; // Button is 'hot' & 'active'
         else
-            buttonColour = {1.0f, 1.0f, 1.0f, 0.7f}; // Button is 'hot'
+            buttonColour = {0.3f, 0.3f, 0.3f, 1.0f}; // Button is 'hot'
     }
     else{
         buttonColour = {1.0f, 1.0f, 1.0f, 1.0f}; // button is not hot, but it may be active

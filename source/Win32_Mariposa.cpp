@@ -234,7 +234,7 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpEve
 void PlatformPollEvents(mpEventReceiver *pReceiver)
 {
     MSG message;
-    while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE))
+    while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE | PM_QS_INPUT))
     {
         switch (message.message)
         {

@@ -55,6 +55,11 @@ inline vec4 mpConvertToDenseColour(mpVoxelColour colour)
     return result;
 }
 
+inline uint8_t mpRandomUint8()
+{
+    return static_cast<uint8_t>(rand() / 500);
+}
+
 struct mpRayCastHitInfo
 {
     mpVoxel *voxel;

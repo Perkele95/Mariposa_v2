@@ -577,11 +577,12 @@ inline float perlin(float x, float y)
     float result = _lerp(ix0, ix1, sy);
     return result;
 }
-
-inline float mapNoise(vec3 position)
+// assuming z = up
+inline float yzNoise(vec3 position)
 {
-    float map = perlin(position.x, position.y);
-    float result = perlin(map, position.z);
+    float noiseXZ = perlin(position.x, position.z);
+    float noiseZY = perlin(position.z, position.y);
+    float result = (noiseXZ + noiseZY) / 2.0f;
 
     return result;
 }

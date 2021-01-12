@@ -3,7 +3,8 @@
 #include <stdint.h>
 #include <cstring>
 #include "vulkan\vulkan.h"
-#include "mp_maths.h"
+#include "mp_maths.hpp"
+#include "mp_string.hpp"
 #include "events.h"
 
 #define MP_INTERNAL
