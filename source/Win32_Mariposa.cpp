@@ -168,57 +168,57 @@ static void Win32ToggleFullScreen()
     }
 }
 
-static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpEventState state, bool32 altKeyDown)
+static void ProcessKeyEvents(mpEventHandler &eventHandler, uint32_t keyCode, bool32 altKeyDown)
 {
     switch (keyCode) {
     case 'W':
-        DispatchKeyEvent(pReceiver, MP_KEY_W, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_W;
         break;
     case 'A':
-        DispatchKeyEvent(pReceiver, MP_KEY_A, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_A;
         break;
     case 'S':
-        DispatchKeyEvent(pReceiver, MP_KEY_S, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_S;
         break;
     case 'D':
-        DispatchKeyEvent(pReceiver, MP_KEY_D, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_D;
         break;
     case 'Q':
-        DispatchKeyEvent(pReceiver, MP_KEY_Q, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_Q;
         break;
     case 'E':
-        DispatchKeyEvent(pReceiver, MP_KEY_E, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_E;
         break;
     case 'F':
-        DispatchKeyEvent(pReceiver, MP_KEY_F, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_F;
         break;
     case VK_UP:
-        DispatchKeyEvent(pReceiver, MP_KEY_UP, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_UP;
         break;
     case VK_DOWN:
-        DispatchKeyEvent(pReceiver, MP_KEY_DOWN, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_DOWN;
         break;
     case VK_LEFT:
-        DispatchKeyEvent(pReceiver, MP_KEY_LEFT, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_LEFT;
         break;
     case VK_RIGHT:
-        DispatchKeyEvent(pReceiver, MP_KEY_RIGHT, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_RIGHT;
         break;
     case VK_SPACE:
-        DispatchKeyEvent(pReceiver, MP_KEY_SPACE, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_SPACE;
         break;
     case VK_ESCAPE:
-        DispatchKeyEvent(pReceiver, MP_KEY_ESCAPE, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_ESCAPE;
         break;
     case VK_CONTROL:
-        DispatchKeyEvent(pReceiver, MP_KEY_CONTROL, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_CONTROL;
         break;
     case VK_SHIFT:
-        DispatchKeyEvent(pReceiver, MP_KEY_SHIFT, state);
+        eventHandler.keyPressEvents |= MP_KEY_EVENT_SHIFT;
         break;
     default: break;
     }
-    if(altKeyDown && (state == MP_EVENT_STATE_PRESS))
+    if(altKeyDown)
     {
         if(keyCode == VK_F4)
         {
@@ -231,7 +231,13 @@ static void ProcessKeyEvents(mpEventReceiver *pReceiver, uint32_t keyCode, mpEve
     }
 }
 
-void PlatformPollEvents(mpEventReceiver *pReceiver)
+bool32 PlatformIsKeyDown(mpKeyCode key)
+{
+    // Bitmask ensures checking of high order bits according to win32 docs
+    return static_cast<bool32>(GetKeyState(key) & 0xFF00);
+}
+
+void PlatformPollEvents(mpEventHandler &eventHandler)
 {
     MSG message;
     while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE | PM_QS_INPUT))
@@ -240,12 +246,13 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
         {
             case WM_MOUSEMOVE:
             {
-                pReceiver->mouseX = message.lParam & 0x0000FFFF;
-                pReceiver->mouseY = static_cast<int32_t>(static_cast<uint32_t>(message.lParam) >> 16);
+                eventHandler.mouseX = message.lParam & 0x0000FFFF;
+                eventHandler.mouseY = static_cast<int32_t>(static_cast<uint32_t>(message.lParam) >> 16);
+                eventHandler.mouseEvents |= MP_MOUSE_MOVE;
             } break;
             case WM_LBUTTONDOWN:
             {
-                DispatchMouseEvent(pReceiver, MP_MOUSE_CLICK_LEFT, MP_EVENT_STATE_PRESS);
+                eventHandler.mouseEvents |= MP_MOUSE_CLICK_LEFT;
             } break;
             case WM_LBUTTONUP:
             {
@@ -253,7 +260,7 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
             } break;
             case WM_RBUTTONDOWN:
             {
-
+                eventHandler.mouseEvents |= MP_MOUSE_CLICK_RIGHT;
             } break;
             case WM_RBUTTONUP:
             {
@@ -275,16 +282,14 @@ void PlatformPollEvents(mpEventReceiver *pReceiver)
             case WM_SYSKEYUP:
             case WM_KEYUP:
             {
-                uint32_t keyCode = (uint32_t)message.wParam;
-                bool32 altKeyDown = (message.lParam & (1 << 29));
-                ProcessKeyEvents(pReceiver, keyCode, MP_EVENT_STATE_RELEASE, altKeyDown);
+
             } break;
             case WM_KEYDOWN:
             case WM_SYSKEYDOWN:
             {
                 uint32_t keyCode = (uint32_t)message.wParam;
                 bool32 altKeyDown = (message.lParam & (1 << 29));
-                ProcessKeyEvents(pReceiver, keyCode, MP_EVENT_STATE_PRESS, altKeyDown);
+                ProcessKeyEvents(eventHandler, keyCode, altKeyDown);
             } break;
 
             default:

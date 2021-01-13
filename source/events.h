@@ -2,23 +2,48 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef uint8_t mpKeyCode;
+
+enum mpVirtualKeyCodes : mpKeyCode
+{
+    MP_KEY_LMBUTTON = 0x01,
+    MP_KEY_RMBUTTON = 0x02,
+    MP_KEY_SHIFT = 0x10,
+    MP_KEY_CTRL = 0x11,
+    MP_KEY_ALT = 0x12,
+    MP_KEY_NUM0 = 0x30,
+    MP_KEY_NUM1 = 0x31,
+    MP_KEY_NUM2 = 0x32,
+    MP_KEY_NUM3 = 0x33,
+    MP_KEY_NUM4 = 0x34,
+    MP_KEY_NUM5 = 0x35,
+    MP_KEY_NUM6 = 0x36,
+    MP_KEY_NUM7 = 0x37,
+    MP_KEY_NUM8 = 0x38,
+    MP_KEY_NUM9 = 0x39,
+    MP_KEY_A = 0x41,
+    MP_KEY_D = 0x44,
+    MP_KEY_S = 0x53,
+    MP_KEY_W = 0x57,
+};
+
 enum mpKeyEvent
 {
-    MP_KEY_W = 0x00000001,
-    MP_KEY_S = 0x00000002,
-    MP_KEY_A = 0x00000004,
-    MP_KEY_D = 0x00000008,
-    MP_KEY_Q = 0x00000010,
-    MP_KEY_E = 0x00000020,
-    MP_KEY_UP = 0x00000040,
-    MP_KEY_DOWN = 0x00000080,
-    MP_KEY_LEFT = 0x00000100,
-    MP_KEY_RIGHT = 0x00000200,
-    MP_KEY_SPACE = 0x00000400,
-    MP_KEY_ESCAPE = 0x00000800,
-    MP_KEY_CONTROL = 0x00001000,
-    MP_KEY_SHIFT = 0x00002000,
-    MP_KEY_F = 0x00004000,
+    MP_KEY_EVENT_W = 0x00000001,
+    MP_KEY_EVENT_S = 0x00000002,
+    MP_KEY_EVENT_A = 0x00000004,
+    MP_KEY_EVENT_D = 0x00000008,
+    MP_KEY_EVENT_Q = 0x00000010,
+    MP_KEY_EVENT_E = 0x00000020,
+    MP_KEY_EVENT_UP = 0x00000040,
+    MP_KEY_EVENT_DOWN = 0x00000080,
+    MP_KEY_EVENT_LEFT = 0x00000100,
+    MP_KEY_EVENT_RIGHT = 0x00000200,
+    MP_KEY_EVENT_SPACE = 0x00000400,
+    MP_KEY_EVENT_ESCAPE = 0x00000800,
+    MP_KEY_EVENT_CONTROL = 0x00001000,
+    MP_KEY_EVENT_SHIFT = 0x00002000,
+    MP_KEY_EVENT_F = 0x00004000,
 };
 
 enum mpMouseEvent
@@ -29,43 +54,23 @@ enum mpMouseEvent
     MP_MOUSE_CLICK_MIDDLE = 0x00000008,
 };
 
-enum mpEventState { MP_EVENT_STATE_RELEASE = 0, MP_EVENT_STATE_PRESS = 1 };
-
-struct mpEventReceiver
+struct mpEventHandler
 {
-    uint64_t keyPressedEvents;
-    uint64_t keyReleasedEvents;
-    uint32_t mousePressedEvents;
-    uint32_t mouseReleasedEvents;
-    int32_t mouseX, mouseY, mouseWheel;
+    uint64_t keyPressEvents;
+    uint32_t mouseEvents;
+    int32_t mouseWheel, mouseX, mouseY, mouseDeltaX, mouseDeltaY, prevMouseX, prevMouseY;
 };
 
-inline void DispatchKeyEvent(mpEventReceiver *const pReceiver, mpKeyEvent event, mpEventState state)
+inline void mpEventHandlerBegin(mpEventHandler &eventHandler)
 {
-    if(state)
-        pReceiver->keyPressedEvents |= event;
-    else
-        pReceiver->keyReleasedEvents |= event;
+    eventHandler.mouseDeltaX = eventHandler.mouseX - eventHandler.prevMouseX;
+    eventHandler.mouseDeltaY = eventHandler.mouseY - eventHandler.prevMouseY;
 }
 
-inline void DispatchMouseEvent(mpEventReceiver *const pReceiver, mpMouseEvent event, mpEventState state)
+inline void mpEventHandlerEnd(mpEventHandler &eventHandler)
 {
-    if(state)
-        pReceiver->mousePressedEvents |= event;
-    else
-        pReceiver->mouseReleasedEvents |= event;
-}
-
-inline void DispatchMouseMove(mpEventReceiver *const pReceiver, int32_t x, int32_t y)
-{
-    pReceiver->mouseX = x;
-    pReceiver->mouseX = y;
-}
-
-inline void ResetEventReceiver(mpEventReceiver *const pReceiver)
-{
-    pReceiver->keyPressedEvents = 0;
-    pReceiver->keyReleasedEvents = 0;
-    pReceiver->mousePressedEvents = 0;
-    pReceiver->mouseReleasedEvents = 0;
+    eventHandler.prevMouseX = eventHandler.mouseDeltaX;
+    eventHandler.prevMouseY = eventHandler.mouseDeltaY;
+    eventHandler.keyPressEvents = 0;
+    eventHandler.mouseEvents = 0;
 }

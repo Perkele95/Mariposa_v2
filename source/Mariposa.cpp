@@ -344,7 +344,7 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMemoryRegion tempMemory)
         }
     }
 }
-
+#if 0 // TODO REMOVE
 static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &eventReceiver)
 {
     constexpr mpKeyEvent keyList[] = {
@@ -356,11 +356,11 @@ static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &even
     };
     constexpr uint32_t listSize = arraysize(keyList);
     for(uint32_t key = 0; key < listSize; key++){
-        core.continuousEvents |= (eventReceiver.keyPressedEvents & keyList[key]);
+        core.continuousEvents |= (eventReceiver.keyPressEvents & keyList[key]);
         core.continuousEvents &= ~(eventReceiver.keyReleasedEvents & keyList[key]);
     }
 }
-
+#endif
 static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t depth = 0)
 {
     uint32_t currentDepth = 0;
@@ -621,11 +621,11 @@ int main(int argc, char *argv[])
     core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
     {
-        // Core :: evenets
-        PlatformPollEvents(&core.eventReceiver);
-        mpUpdateContinuousControls(core, core.eventReceiver);
+        // Core :: events
+        PlatformPollEvents(core.eventHandler);
+        mpEventHandlerBegin(core.eventHandler);
         // Core :: gamestate switch
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_ESCAPE){
+        if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
             if(core.gameState == MP_GAMESTATE_ACTIVE)
                 core.gameState = MP_GAMESTATE_PAUSED;
             else if(core.gameState == MP_GAMESTATE_PAUSED)
@@ -634,8 +634,8 @@ int main(int argc, char *argv[])
         // CORE :: GUI
         const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
         const mpPoint screenCentre = {extent.x / 2, extent.y / 2};
-        const mpPoint mousePos = {core.eventReceiver.mouseX, core.eventReceiver.mouseY};
-        mpGuiBegin(core.gui, extent, mousePos, core.eventReceiver.mousePressedEvents & MP_MOUSE_CLICK_LEFT);
+        const mpPoint mousePos = {core.eventHandler.mouseX, core.eventHandler.mouseY};
+        mpGuiBegin(core.gui, extent, mousePos, core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT);
 
         if(core.gameState == MP_GAMESTATE_PAUSED){
             const int32_t btnOffsetY = screenCentre.y / 15;
@@ -658,6 +658,7 @@ int main(int argc, char *argv[])
             core.camera.pitch = core.camera.pitchClamp;
         else if(core.camera.pitch < -core.camera.pitchClamp)
             core.camera.pitch = -core.camera.pitchClamp;
+#if 0
         // Core :: Update camera rotation values
         if(core.continuousEvents & MP_KEY_UP)
             core.camera.pitch += core.camera.sensitivity * timestep;
@@ -667,6 +668,13 @@ int main(int argc, char *argv[])
             core.camera.yaw += core.camera.sensitivity * timestep;
         else if(core.continuousEvents & MP_KEY_RIGHT)
             core.camera.yaw -= core.camera.sensitivity * timestep;
+#endif
+       if(core.eventHandler.mouseEvents & MP_MOUSE_MOVE){
+           //core.camera.yaw += core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaX) / 1000.0f;
+           //core.camera.pitch += core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaY) / 1000.0f;
+           printf("Delta: %d, %d\n", core.eventHandler.mouseDeltaX, core.eventHandler.mouseDeltaY);
+       }
+
         // Core :: Get camera vectors
         const float yawCos = cosf(core.camera.yaw);
         const float yawSin = sinf(core.camera.yaw);
@@ -676,13 +684,13 @@ int main(int argc, char *argv[])
         const vec3 left = {yawSin, -yawCos, 0.0f};
         constexpr vec3 up = {0.0f, 0.0f, 1.0f};
         // Core :: Update player position state
-        if(core.continuousEvents & MP_KEY_W)
+        if(PlatformIsKeyDown('W'))
             player.position += xyFront * core.camera.speed * timestep;
-        else if(core.continuousEvents & MP_KEY_S)
+        else if(PlatformIsKeyDown('S'))
             player.position -= xyFront * core.camera.speed * timestep;
-        if(core.continuousEvents & MP_KEY_A)
+        if(PlatformIsKeyDown('A'))
             player.position -= left * core.camera.speed * timestep;
-        else if(core.continuousEvents & MP_KEY_D)
+        else if(PlatformIsKeyDown('D'))
             player.position += left * core.camera.speed * timestep;
         // Core :: Update camera matrices
         core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
@@ -693,7 +701,7 @@ int main(int argc, char *argv[])
         mpEntityPhysics(*core.region, player, timestep);
 
         // Game events :: raycasthits
-        if(core.eventReceiver.keyPressedEvents & MP_KEY_F)
+        if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_F)
             mpCreateVoxelSphere(*core.region, core.camera.position, front);
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of subRegions needing updating rather than a for loop
@@ -718,7 +726,7 @@ int main(int argc, char *argv[])
         mpResetMemoryRegion(tempMemory);
         // Core :: Resets
         core.windowInfo.hasResized = false;
-        ResetEventReceiver(&core.eventReceiver);
+        mpEventHandlerEnd(core.eventHandler);
         MP_PROCESS_PROFILER
         timestep = PlatformUpdateClock();
     }

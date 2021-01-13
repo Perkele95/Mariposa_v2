@@ -198,11 +198,10 @@ struct mpCore
     const char *name;
     mpWindowData windowInfo;
     mpCallbacks callbacks;
-    mpEventReceiver eventReceiver;
+    mpEventHandler eventHandler;
     mpFlags gameState;
 
     mpCamera camera;
-    mpFlags continuousEvents;
 
     mpFlags renderFlags;
     mpVoxelRegion *region;
