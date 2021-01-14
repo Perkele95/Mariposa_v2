@@ -180,11 +180,10 @@ static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpMemoryRegi
 // TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
 static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
 {
-    constexpr float noiseOffset = 40.0f;
-    constexpr float noiseHeight = 8.0f;
+    constexpr float noiseOffset = 60.0f;
+    constexpr float noiseHeight = 12.0f;
     constexpr float granularity = 0.03f;
-    constexpr float colourGranularity = 0.2f;
-    constexpr float colourNoiseHeight = 60.0f;
+    constexpr float colourGranularity = 0.03f;
     mpVoxelSubRegion subRegion = {};
     subRegion.position = subRegionPosition;
 
@@ -198,33 +197,31 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
                 if(globalPos.z > surfaceThreshold)
                     continue;
 
-                const float xy = yzNoise(globalPos * 0.025f);
-                if(xy > 0.12f)
+                const float groundNoise = mapNoise(globalPos * colourGranularity);
+                if(groundNoise > 0.2f)
                     continue;
 
                 subRegion.flags |= MP_SUBREG_FLAG_ACTIVE;
                 mpVoxel &voxel = subRegion.voxels[x][y][z];
                 voxel.flags = MP_VOXEL_FLAG_ACTIVE;
 
-                if(xy < 0.07f){
+                if(groundNoise < 0.08f){
                     // high
-                    voxel.colour.r = 230;
-                    voxel.colour.g = 230;
-                    voxel.colour.b = 230;
-                    voxel.colour.a = 255;
-                }
-                else if(xy < 0.105f){
-                    // mid
-                    voxel.colour.r = 40;
-                    voxel.colour.g = 75;
-                    voxel.colour.b = 65;
+                    uint8_t randColour = 200 + mpRandomUint8() + 20;
+                    if(randColour < 150)
+                        randColour = 255;
+                    voxel.colour.r = 45;
+                    voxel.colour.g = randColour;
+                    voxel.colour.b = 80;
                     voxel.colour.a = 255;
                 }
                 else{
                     // low
-                    voxel.colour.r = 35;
-                    voxel.colour.g = 40;
-                    voxel.colour.b = 40;
+                    const uint8_t zOffset = static_cast<uint8_t>(globalPos.z);
+                    const uint8_t randColour = mpRandomUint8();
+                    voxel.colour.r = zOffset + randColour;
+                    voxel.colour.g = zOffset + randColour;
+                    voxel.colour.b = zOffset + randColour;
                     voxel.colour.a = 255;
                 }
             }
@@ -344,23 +341,7 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMemoryRegion tempMemory)
         }
     }
 }
-#if 0 // TODO REMOVE
-static void mpUpdateContinuousControls(mpCore& core, const mpEventReceiver &eventReceiver)
-{
-    constexpr mpKeyEvent keyList[] = {
-        MP_KEY_UP, MP_KEY_DOWN,
-        MP_KEY_LEFT, MP_KEY_RIGHT,
-        MP_KEY_W, MP_KEY_S,
-        MP_KEY_A, MP_KEY_D,
-        MP_KEY_E,
-    };
-    constexpr uint32_t listSize = arraysize(keyList);
-    for(uint32_t key = 0; key < listSize; key++){
-        core.continuousEvents |= (eventReceiver.keyPressEvents & keyList[key]);
-        core.continuousEvents &= ~(eventReceiver.keyReleasedEvents & keyList[key]);
-    }
-}
-#endif
+
 static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t depth = 0)
 {
     uint32_t currentDepth = 0;
@@ -389,34 +370,6 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
         }
     }
     return hitInfo;
-}
-
-inline static void mpSpawnTree(mpVoxelRegion *region, const vec3 origin)
-{
-    constexpr int32_t size = 6;
-    constexpr float radius = size/2;
-    constexpr int32_t start = -(size/2);
-    for(int32_t layer = start; layer < 25; layer++){
-        for(int32_t y = start; y < size; y++){
-            for(int32_t x = start; x < size; x++){
-                const vec3 target = origin + mpVec3IntToVec3(vec3Int{x, y, layer});
-                mpVoxelQueryInfo info = mpQueryVoxelLocation(*region, target);
-                if(info.voxel != nullptr){
-                    const vec3 distanceCalc = {origin.x, origin.y, target.z};
-                    const float distance = vec3Length(target - distanceCalc);
-                    if(distance > radius)
-                        continue;
-
-                    info.voxel->flags = MP_VOXEL_FLAG_ACTIVE;
-                    info.voxel->colour.r = x & 1 ? 0x25 : 0x2A;
-                    info.voxel->colour.g = y & 1 ? 0x10 : 0x13;
-                    info.voxel->colour.b = 0x10;
-                    info.voxel->colour.a = 0xFF;
-                    info.subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
-                }
-            }
-        }
-    }
 }
 
 inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegion *region, const vec3 origin), const int32_t zIndex)
@@ -461,13 +414,48 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                             continue;
 
                         voxel.flags = MP_VOXEL_FLAG_ACTIVE;
-                        voxel.colour.rgba = 0x222222FF;
+                        voxel.colour.rgba = 0x050505FF;
 
                         const uint8_t colourIncrement = static_cast<uint8_t>(z + zOffset) * 12 + mpRandomUint8();
                         voxel.colour.r += colourIncrement;
                         voxel.colour.g += colourIncrement;
                         voxel.colour.b += colourIncrement;
                         subRegion->flags |= MP_SUBREG_FLAG_DIRTY | MP_SUBREG_FLAG_ACTIVE;
+                    }
+                }
+            }
+        }
+    }
+}
+// TODO: optimise
+static void mpDigVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
+{
+    const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
+    if(rayCastHit.voxel == nullptr)
+        return;
+
+    constexpr int32_t size = 12;
+    constexpr uint8_t zOffset = size / 2;
+    constexpr int32_t start = -(size/2);
+    constexpr float radius = static_cast<float>(size / 2);
+
+    for(int32_t z = start; z < size; z++){
+        for(int32_t y = start; y < size; y++){
+            for(int32_t x = start; x < size; x++){
+                const vec3 target = rayCastHit.position + mpVec3IntToVec3(vec3Int{x,y,z});
+                mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, target);
+
+                if(subRegion != nullptr){
+                    const vec3 localHit = target - subRegion->position;
+
+                    if(vec3Length(target - rayCastHit.position) < radius){
+                        const vec3Int index = mpVec3ToVec3Int(localHit);
+                        mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
+                        if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
+                            continue;
+
+                        voxel.flags = 0;
+                        subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
                     }
                 }
             }
@@ -549,7 +537,7 @@ int main(int argc, char *argv[])
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
-    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;// | MP_RENDER_FLAG_REGENERATE_WORLD;
+    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
     core.gameState = MP_GAMESTATE_ACTIVE;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
@@ -599,16 +587,16 @@ int main(int argc, char *argv[])
     core.camera.model = Mat4x4Identity();
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
 
-    core.pointLight.position = {100.0f, 100.0f, 60.0f};
+    core.pointLight.position = {100.0f, 100.0f, 80.0f};
     core.pointLight.constant = 1.0f;
     core.pointLight.linear = 0.07f;
     core.pointLight.quadratic = 0.017f;
-    core.pointLight.diffuse = {2.0f, 1.3f, 1.0f};
-    core.pointLight.ambient = 0.12f;
+    core.pointLight.diffuse = {1.0f, 0.75f, 0.5f};
+    core.pointLight.ambient = 0.005f;
 
     // TODO: Entity Component System?
     mpEntity player = {};
-    player.position = {19.0f, 19.0f, 45.0f};
+    player.position = {19.0f, 19.0f, 62.0f};
     player.velocity = {};
     player.mass = 2.0f;
     player.speed = 10.0f;
@@ -699,8 +687,10 @@ int main(int argc, char *argv[])
         mpEntityPhysics(*core.region, player, timestep);
 
         // Game events :: raycasthits
-        if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_F)
+        if(PlatformIsKeyDown(MP_KEY_LMBUTTON))
             mpCreateVoxelSphere(*core.region, core.camera.position, front);
+        else if(PlatformIsKeyDown(MP_KEY_RMBUTTON))
+            mpDigVoxelSphere(*core.region, core.camera.position, front);
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of subRegions needing updating rather than a for loop
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){

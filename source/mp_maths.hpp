@@ -587,6 +587,16 @@ inline float yzNoise(vec3 position)
     return result;
 }
 
+inline float mapNoise(vec3 position)
+{
+    const float noiseXY = perlin(position.x, position.y);
+    const float noiseXZ = perlin(position.x, position.z);
+    const float noiseYZ = perlin(position.y, position.z);
+    const float result = (noiseXY + noiseXZ + noiseYZ) / 3.0f;
+
+    return result;
+}
+
 inline uint32_t uint32Clamp(uint32_t value, uint32_t min, uint32_t max)
 {
     if(value < min)
