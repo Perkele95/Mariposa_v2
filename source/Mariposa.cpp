@@ -594,7 +594,7 @@ int main(int argc, char *argv[])
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
 
     core.camera.speed = 10.0f;
-    core.camera.sensitivity = 2.0f;
+    core.camera.sensitivity = 0.3f;
     core.camera.fov = PI32 / 3.0f;
     core.camera.model = Mat4x4Identity();
     core.camera.pitchClamp = (PI32 / 2.0f) - 0.01f;
@@ -616,32 +616,53 @@ int main(int argc, char *argv[])
 
     float timestep = 0.0f;
     PlatformPrepareClock();
+    PlatformSetCursorVisbility(false);
 
     core.windowInfo.running = true;
     core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
     {
+        // Core :: update constants
+        const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
+        const mpPoint screenCentre = {extent.x / 2, extent.y / 2};
         // Core :: events
         PlatformPollEvents(core.eventHandler);
         mpEventHandlerBegin(core.eventHandler);
         // Core :: gamestate switch
         if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
-            if(core.gameState == MP_GAMESTATE_ACTIVE)
+            if(core.gameState == MP_GAMESTATE_ACTIVE){
                 core.gameState = MP_GAMESTATE_PAUSED;
-            else if(core.gameState == MP_GAMESTATE_PAUSED)
+                PlatformSetCursorVisbility(1);
+            }
+            else if(core.gameState == MP_GAMESTATE_PAUSED){
                 core.gameState = MP_GAMESTATE_ACTIVE;
+                PlatformSetCursorVisbility(0);
+            }
         }
         // CORE :: GUI
-        const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
-        const mpPoint screenCentre = {extent.x / 2, extent.y / 2};
         const mpPoint mousePos = {core.eventHandler.mouseX, core.eventHandler.mouseY};
         mpGuiBegin(core.gui, extent, mousePos, core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT);
 
-        if(core.gameState == MP_GAMESTATE_PAUSED){
+        if(core.gameState == MP_GAMESTATE_ACTIVE){
+            PlatformSetMousePos(screenCentre.x, screenCentre.y);
+
+            // Core :: Update camera rotation
+            if(core.eventHandler.mouseEvents & MP_MOUSE_MOVE){
+                core.camera.yaw -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaX);
+                core.camera.pitch -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaY);
+            }
+            // Core :: Restrict camera rotation
+            if(core.camera.pitch > core.camera.pitchClamp)
+                core.camera.pitch = core.camera.pitchClamp;
+            else if(core.camera.pitch < -core.camera.pitchClamp)
+                core.camera.pitch = -core.camera.pitchClamp;
+        }
+        else if(core.gameState == MP_GAMESTATE_PAUSED){
             const int32_t btnOffsetY = screenCentre.y / 15;
             if(mpButton(core.gui, 0, {screenCentre.x, screenCentre.y - btnOffsetY}, 1)){
                 // -> Resume
                 core.gameState = MP_GAMESTATE_ACTIVE;
+                PlatformSetCursorVisbility(0);
             }
             if(mpButton(core.gui, 1, {screenCentre.x, screenCentre.y + btnOffsetY}, 2)){
                 // -> Quit
@@ -652,29 +673,6 @@ int main(int argc, char *argv[])
 
         mpGuiEnd(core.gui);
         renderer.RecreateGuiBuffers(core.gui);
-
-        // Core :: Clamp rotation values
-        if(core.camera.pitch > core.camera.pitchClamp)
-            core.camera.pitch = core.camera.pitchClamp;
-        else if(core.camera.pitch < -core.camera.pitchClamp)
-            core.camera.pitch = -core.camera.pitchClamp;
-#if 0
-        // Core :: Update camera rotation values
-        if(core.continuousEvents & MP_KEY_UP)
-            core.camera.pitch += core.camera.sensitivity * timestep;
-        else if(core.continuousEvents & MP_KEY_DOWN)
-            core.camera.pitch -= core.camera.sensitivity * timestep;
-        if(core.continuousEvents & MP_KEY_LEFT)
-            core.camera.yaw += core.camera.sensitivity * timestep;
-        else if(core.continuousEvents & MP_KEY_RIGHT)
-            core.camera.yaw -= core.camera.sensitivity * timestep;
-#endif
-       if(core.eventHandler.mouseEvents & MP_MOUSE_MOVE){
-           //core.camera.yaw += core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaX) / 1000.0f;
-           //core.camera.pitch += core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaY) / 1000.0f;
-           printf("Delta: %d, %d\n", core.eventHandler.mouseDeltaX, core.eventHandler.mouseDeltaY);
-       }
-
         // Core :: Get camera vectors
         const float yawCos = cosf(core.camera.yaw);
         const float yawSin = sinf(core.camera.yaw);
@@ -726,7 +724,7 @@ int main(int argc, char *argv[])
         mpResetMemoryRegion(tempMemory);
         // Core :: Resets
         core.windowInfo.hasResized = false;
-        mpEventHandlerEnd(core.eventHandler);
+        mpEventHandlerEnd(core.eventHandler, screenCentre.x, screenCentre.y, core.windowInfo.fullscreen);
         MP_PROCESS_PROFILER
         timestep = PlatformUpdateClock();
     }

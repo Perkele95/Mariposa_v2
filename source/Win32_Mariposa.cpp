@@ -34,7 +34,7 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM wPara
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            //MP_ASSERT(!"Keyboard input came in through a non-dispatch message!");
+            mp_assert(!"Keyboard input came in through a non-dispatch message!");
         } break;
 
         default:
@@ -109,7 +109,8 @@ bool32 Win32WriteFile(const char *filename, mpFile *file)
 
 void PlatformCreateWindow(mpWindowData *windowData, const char *name)
 {
-    gWin32WindowData = &(*windowData);
+    gWin32WindowData = windowData;
+    gWin32WindowData->fullscreen = false;
     gHInstance = GetModuleHandleA(0);
 
     WNDCLASSA windowClass = {};
@@ -218,17 +219,30 @@ static void ProcessKeyEvents(mpEventHandler &eventHandler, uint32_t keyCode, boo
         break;
     default: break;
     }
-    if(altKeyDown)
-    {
-        if(keyCode == VK_F4)
-        {
+    if(altKeyDown){
+        if(keyCode == VK_F4){
             gWin32WindowData->running = false;
         }
-        else if(keyCode == VK_RETURN)
-        {
+        else if(keyCode == VK_RETURN){
             Win32ToggleFullScreen();
+            gWin32WindowData->fullscreen = !gWin32WindowData->fullscreen;
         }
     }
+}
+
+void PlatformSetMousePos(int32_t localX, int32_t localY)
+{
+    // TODO: only check getwindowrect when window size/position updates
+    RECT windowRect;
+    GetWindowRect(gWindow, &windowRect);
+    const int32_t x = windowRect.left + localX;
+    const int32_t y = windowRect.top + localY;
+    SetCursorPos(x, y);
+}
+
+void PlatformSetCursorVisbility(bool32 show)
+{
+    ShowCursor(show);
 }
 
 bool32 PlatformIsKeyDown(mpKeyCode key)

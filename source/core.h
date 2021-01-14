@@ -53,7 +53,7 @@ typedef uint16_t mpBitFieldShort;
 struct mpWindowData
 {
     int32_t width, height;
-    bool32 hasResized, running;
+    bool32 hasResized, running, fullscreen;
 };
 
 struct mpFile

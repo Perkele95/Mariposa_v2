@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 typedef uint8_t mpKeyCode;
+typedef int32_t bool32;
 
 enum mpVirtualKeyCodes : mpKeyCode
 {
@@ -58,7 +59,8 @@ struct mpEventHandler
 {
     uint64_t keyPressEvents;
     uint32_t mouseEvents;
-    int32_t mouseWheel, mouseX, mouseY, mouseDeltaX, mouseDeltaY, prevMouseX, prevMouseY;
+    int32_t mouseWheel, mouseX, mouseY, prevMouseX, prevMouseY;
+    int32_t mouseDeltaX, mouseDeltaY;
 };
 
 inline void mpEventHandlerBegin(mpEventHandler &eventHandler)
@@ -67,10 +69,16 @@ inline void mpEventHandlerBegin(mpEventHandler &eventHandler)
     eventHandler.mouseDeltaY = eventHandler.mouseY - eventHandler.prevMouseY;
 }
 
-inline void mpEventHandlerEnd(mpEventHandler &eventHandler)
+inline void mpEventHandlerEnd(mpEventHandler &eventHandler, int32_t centreX, int32_t centreY, bool32 isFullscreen)
 {
-    eventHandler.prevMouseX = eventHandler.mouseDeltaX;
-    eventHandler.prevMouseY = eventHandler.mouseDeltaY;
+    if(isFullscreen){
+        eventHandler.prevMouseX = centreX;
+        eventHandler.prevMouseY = centreY;
+    }
+    else{
+        eventHandler.prevMouseX = centreX - 8;
+        eventHandler.prevMouseY = centreY - 31;
+    }
     eventHandler.keyPressEvents = 0;
     eventHandler.mouseEvents = 0;
 }
