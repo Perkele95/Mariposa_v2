@@ -38,7 +38,7 @@ struct mpRenderer
     void LoadTextures(const char *paths[], uint32_t count);
     void InitResources(mpCore &core);
     void RecreateGuiBuffers(mpGUI &gui);
-    void RecreateSceneBuffer(mpMesh &mesh, uint32_t x, uint32_t y, uint32_t z);
+    void RecreateSceneBuffer(mpMesh &mesh, uint32_t meshID);
     void Update(mpCore &core);
     void Cleanup();
 private:
@@ -95,10 +95,11 @@ private:
 
         VkShaderModule vertShaderModule;
         VkShaderModule fragShaderModule;
-        VkBuffer vertexbuffers[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
-        VkDeviceMemory vertexbufferMemories[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
-        VkBuffer indexbuffers[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
-        VkDeviceMemory indexbufferMemories[MP_REGION_SIZE][MP_REGION_SIZE][MP_REGION_SIZE];
+        VkBuffer *vertexbuffers;
+        VkDeviceMemory *vertexbufferMemories;
+        VkBuffer *indexbuffers;
+        VkDeviceMemory *indexbufferMemories;
+        uint32_t bufferCount;
     }scene;
 
     struct
@@ -146,7 +147,7 @@ private:
     void PrepareFramebuffers();
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags propertyFlags, VkBuffer &buffer, VkDeviceMemory &bufferMemory);
     void mapBufferData(void *rawBuffer, VkDeviceSize bufferSize, VkBuffer *buffer, VkDeviceMemory *bufferMemory, VkBufferUsageFlags usage);
-    void PrepareScenebuffers(mpVoxelRegion *region);
+    void PrepareScenebuffers(const mpMeshArray &meshArray);
     void PrepareUniformbuffers();
     void PrepareDescriptorPool();
     void PrepareSceneDescriptorSets();
@@ -155,5 +156,5 @@ private:
     void PrepareSyncObjects();
     void CleanUpSwapchain();
     void ReCreateSwapchain(int32_t width, int32_t height);
-    void DrawFrame(const mpVoxelRegion &region, const mpGUI &mpgui, uint32_t imageIndex);
+    void DrawFrame(const mpMeshArray &meshArray, const mpGUI &mpgui, uint32_t imageIndex);
 };

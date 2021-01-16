@@ -49,3 +49,9 @@ inline void *mpAlloc(mpMemoryRegion region, size_t size)
     }
     return result;
 }
+
+inline void mpResizeMemory(mpMemoryRegion source, size_t newSize)
+{
+    source->data = realloc(source->data, newSize);
+    source->totalSize = newSize;
+}

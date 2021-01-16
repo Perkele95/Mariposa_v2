@@ -66,78 +66,90 @@ struct mpRayCastHitInfo
     vec3 position;
 };
 
-/*---------
- * ECS
+/*
+ *  Mesh Registry
  */
-/* TODO: Figure out this shit
-typedef int32_t Entity;
-typedef uint32_t Signature;
-typedef int32_t EntityKey;
-constexpr int32_t ECS_NULL = -1;
-constexpr uint32_t ECS_MAX_ENTITIES = 20;
 
-enum mpComponentIndex
+// Create mesh registry -> set inital size, list and queue
+inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queueCapacity)
 {
-    ECS_COMP_TAG,
-    ECS_COMP_PHYS,
-    ECS_NUM_COMPONENTS
-};
+    mpMeshRegistry registry = {};
 
-struct mpComponent
-{
-    Signature type;
-    union
-    {
-        struct TagComponent
-        {
-            char tag[24];
-        }asTag;
-        struct PhysicsComponent
-        {
-            vec3 position, velocity;
-            float mass;
-        }asPhys;
-    };
-};
+    // Init mesharray
+    const size_t meshDataSize = meshCapacity * sizeof(mpMesh);
+    registry.meshArrayMemory = mpCreateMemoryRegion(meshDataSize);
+    registry.meshArray.data = static_cast<mpMesh*>(mpAlloc(registry.meshArrayMemory, meshDataSize));
+    registry.meshArray.count = 0;
+    registry.meshArray.max = meshCapacity;
 
-struct EntityRegistry
-{
-    EntityKey keyTable[ECS_MAX_ENTITIES][ECS_NUM_COMPONENTS];
+    // Init queue
+    registry.queueMemory = mpCreateMemoryRegion(queueCapacity * sizeof(mpMeshQueueItem));
+    registry.reQueue.front = nullptr;
+    registry.reQueue.rear = nullptr;
+    // Init queue free list
+    registry.reQueue.freeListHead = static_cast<mpMeshQueueItem*>(mpAlloc(registry.queueMemory, queueCapacity * sizeof(mpMeshQueueItem)));
+    for(uint32_t i = 0; i < queueCapacity - 1; i++){
+        registry.reQueue.freeListHead[i].data = nullptr;
+        registry.reQueue.freeListHead[i].next = &registry.reQueue.freeListHead[i + 1];
+    }
+    // Last element in freelist has no next element
+    registry.reQueue.freeListHead[queueCapacity - 1].data = nullptr;
+    registry.reQueue.freeListHead[queueCapacity - 1].next = nullptr;
 
-    mpComponent::TagComponent tagComponents[ECS_NUM_COMPONENTS];
-    mpComponent::PhysicsComponent physComponents[ECS_NUM_COMPONENTS];
-};
-
-inline static EntityRegistry* mpCreateEntityRegistry(void *buffer)
-{
-    EntityRegistry* reg = static_cast<EntityRegistry*>(buffer);
-    for(uint32_t ID = 0; ID < ECS_NUM_COMPONENTS; ID++)
-        reg->keyTable[ID][0] = ECS_NULL;
-
-    return reg;
+    return registry;
 }
 
-inline static Entity mpRegisterEntity(EntityRegistry *reg, Signature componentSignature)
+inline void mpDestroyMeshRegistry(mpMeshRegistry &registry)
 {
-    Entity newEntity = ECS_NULL;
-    // => Table[entity][FreeFlag + component]
-    // the 0th column is reserved for flags
-    for(uint32_t ID = 0; ID < ECS_MAX_ENTITIES; ID++)
-    {
-        if(reg->keyTable[ID][0] == ECS_NULL)
-        {
-            newEntity = ID;
-            reg->keyTable[ID][0] = 0;
-            break;
-        }
-    }
-    if(componentSignature & ECS_COMP_TAG)
-    {
-        // Tag Comp active
-    }
-    if(componentSignature & ECS_COMP_PHYS)
-    {
-        // Phys Comp active
-    }
+    mpDestroyMemoryRegion(registry.meshArrayMemory);
+    mpDestroyMemoryRegion(registry.queueMemory);
+    memset(&registry, 0, sizeof(mpMeshRegistry));
 }
-*/
+
+inline mpMesh &mpGetMesh(mpMeshRegistry &registry)
+{
+    if(registry.meshArray.count + 1 > registry.meshArray.max){
+        registry.meshArray.max *= 2;
+        mpResizeMemory(registry.meshArrayMemory, sizeof(mpMesh) * registry.meshArray.max);
+    }
+    mpMesh &result = registry.meshArray.data[registry.meshArray.count];
+    registry.meshArray.count++;
+    return result;
+}
+// TODO
+inline void mpReplaceMesh(mpMeshRegistry &registry, mpMesh *oldMesh, mpMesh *newMesh);
+// TODO
+inline void mpDeregisterMesh(mpMeshRegistry &registry, mpMesh *mesh);
+
+inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMesh *mesh)
+{
+    mpMeshQueue &queue = registry.reQueue;
+    if(queue.freeListHead == nullptr){
+        // TODO: realloc
+        MP_PUTS_WARN("MESHQUEUE WARNING, enqueue denied: queue full");
+        return;
+    }
+    if(queue.front == nullptr)
+        queue.front = queue.freeListHead;
+    queue.rear->next = queue.freeListHead;
+    queue.rear = queue.freeListHead;
+    queue.rear->data = mesh;
+    queue.freeListHead = queue.freeListHead->next;
+}
+
+inline mpMesh *mpDequeueMesh(mpMeshRegistry &registry)
+{
+    mpMeshQueue &queue = registry.reQueue;
+    if(queue.front == nullptr){
+        MP_PUTS_WARN("MESHQUEUE WARNING, dequeue denied: queue empty");
+        return nullptr;
+    }
+    mpMesh *result = queue.front->data;
+    if(queue.front == queue.rear)
+        queue.front = nullptr;
+    else
+        queue.front = queue.front->next;
+    queue.front->next = queue.freeListHead;
+    queue.freeListHead = queue.front;
+    return result;
+}

@@ -100,9 +100,9 @@ struct mpMesh
 {
     mpVertex *vertices;
     uint16_t *indices;
-    mpMemoryRegion memReg;
     uint32_t vertexCount;
     uint32_t indexCount;
+    mpMemoryRegion memReg;
 };
 
 union mpVoxelColour
@@ -134,18 +134,6 @@ struct mpVoxelRegion
     mpFlags reserved;
 };
 
-enum mpSubRegionFlags
-{
-    MP_SUBREG_FLAG_ACTIVE           = 0x0001,
-    MP_SUBREG_FLAG_NEIGHBOUR_NORTH  = 0x0002,
-    MP_SUBREG_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
-    MP_SUBREG_FLAG_NEIGHBOUR_TOP    = 0x0008,
-    MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
-    MP_SUBREG_FLAG_NEIGHBOUR_EAST   = 0x0020,
-    MP_SUBREG_FLAG_NEIGHBOUR_WEST   = 0x0040,
-    MP_SUBREG_FLAG_DIRTY            = 0x0080,
-};
-
 enum mpVoxelFlags
 {
     MP_VOXEL_FLAG_DRAW_TOP    = 0x00000001,
@@ -155,6 +143,19 @@ enum mpVoxelFlags
     MP_VOXEL_FLAG_DRAW_EAST   = 0x00000010,
     MP_VOXEL_FLAG_DRAW_WEST   = 0x00000020,
     MP_VOXEL_FLAG_ACTIVE      = 0x00000040,
+};
+
+enum mpSubRegionFlags
+{
+    MP_SUBREG_FLAG_ACTIVE           = 0x0001,
+    MP_SUBREG_FLAG_NEIGHBOUR_NORTH  = 0x0002,
+    MP_SUBREG_FLAG_NEIGHBOUR_SOUTH  = 0x0004,
+    MP_SUBREG_FLAG_NEIGHBOUR_TOP    = 0x0008,
+    MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM = 0x0010,
+    MP_SUBREG_FLAG_NEIGHBOUR_EAST   = 0x0020,
+    MP_SUBREG_FLAG_NEIGHBOUR_WEST   = 0x0040,
+    MP_SUBREG_FLAG_VISIBLE          = 0x0080,
+    MP_SUBREG_FLAG_DIRTY            = 0x0100,
 };
 // split coreflags & renderingflags
 enum mpRenderFlags
@@ -193,6 +194,34 @@ enum mpGameState
     MP_GAMESTATE_QUIT,
 };
 
+struct mpMeshQueueItem
+{
+    mpMesh *data;
+    mpMeshQueueItem *next;
+};
+
+struct mpMeshQueue
+{
+    mpMeshQueueItem *front;
+    mpMeshQueueItem *rear;
+    mpMeshQueueItem *freeListHead;
+};
+
+struct mpMeshArray
+{
+    mpMesh *data;
+    uint32_t count;
+    uint32_t max;
+};
+
+struct mpMeshRegistry
+{
+    mpMeshArray meshArray;
+    mpMemoryRegion meshArrayMemory;
+    mpMeshQueue reQueue;
+    mpMemoryRegion queueMemory;
+};
+
 struct mpCore
 {
     const char *name;
@@ -205,6 +234,7 @@ struct mpCore
 
     mpFlags renderFlags;
     mpVoxelRegion *region;
+    mpMeshRegistry meshRegistry;
     mpPointLight pointLight;
     mpGUI gui;
 };

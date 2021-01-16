@@ -69,9 +69,12 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
     instanceInfo.enabledExtensionCount = arraysize(requiredExtensions);
     instanceInfo.ppEnabledExtensionNames = requiredExtensions;
 
+    MP_PUTS_INFO("---------------------------------");
+    MP_PUTS_INFO("Vulkan extensions:");
     for(uint32_t i = 0; i < extensionsCount; i++){
-        MP_LOG_INFO("Vk Extennsion %d: %s\n", i, extensionProperties[i].extensionName);
+        MP_LOG_INFO("   %d: %s\n", i, extensionProperties[i].extensionName);
     }
+    MP_PUTS_INFO("---------------------------------");
 
     VkResult error = vkCreateInstance(&instanceInfo, 0, &instance);
     mp_assert(!error)
@@ -341,12 +344,18 @@ void mpRenderer::InitResources(mpCore &core)
     scene.pDescriptorSets =  static_cast<VkDescriptorSet*>(mpAlloc(mpVkMemory, sizeof(VkDescriptorSet) * swapchainImageCount));
     gui.pDescriptorSets =    static_cast<VkDescriptorSet*>(mpAlloc(mpVkMemory, sizeof(VkDescriptorSet) * swapchainImageCount));
 
+    scene.vertexbuffers =    static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * core.meshRegistry.meshArray.count));
+    scene.vertexbufferMemories =    static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * core.meshRegistry.meshArray.count));
+    scene.indexbuffers =    static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * core.meshRegistry.meshArray.count));
+    scene.indexbufferMemories =    static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * core.meshRegistry.meshArray.count));
+    scene.bufferCount = core.meshRegistry.meshArray.count;
+
     // Vulkan :: depth resources
     PrepareDepthResources();
     // Vulkan :: framebuffers
     PrepareFramebuffers();
     // Vulkan :: scenebuffers
-    PrepareScenebuffers(core.region);
+    PrepareScenebuffers(core.meshRegistry.meshArray);
 
     // Vulkan :: sampler
     VkSamplerCreateInfo samplerInfo = {};
@@ -458,7 +467,7 @@ void mpRenderer::RecreateGuiBuffers(mpGUI &mpgui)
     }
 }
 
-void mpRenderer::RecreateSceneBuffer(mpMesh &mesh, uint32_t x, uint32_t y, uint32_t z)
+void mpRenderer::RecreateSceneBuffer(mpMesh &mesh, uint32_t meshID)
 {
     if(mesh.vertexCount == 0)
         return;
@@ -467,22 +476,22 @@ void mpRenderer::RecreateSceneBuffer(mpMesh &mesh, uint32_t x, uint32_t y, uint3
     constexpr VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
     vkDeviceWaitIdle(device);
-    vkDestroyBuffer(device, scene.vertexbuffers[x][y][z], nullptr);
-    vkDestroyBuffer(device, scene.indexbuffers[x][y][z], nullptr);
-    vkFreeMemory(device, scene.vertexbufferMemories[x][y][z], nullptr);
-    vkFreeMemory(device, scene.indexbufferMemories[x][y][z], nullptr);
+    vkDestroyBuffer(device, scene.vertexbuffers[meshID], nullptr);
+    vkDestroyBuffer(device, scene.indexbuffers[meshID], nullptr);
+    vkFreeMemory(device, scene.vertexbufferMemories[meshID], nullptr);
+    vkFreeMemory(device, scene.indexbufferMemories[meshID], nullptr);
 
     VkDeviceSize bufferSize = mesh.vertexCount * sizeof(mpVertex);
     void *rawBuffer = mesh.vertices;
-    VkBuffer *buffer = &scene.vertexbuffers[x][y][z];
-    VkDeviceMemory *bufferMemory = &scene.vertexbufferMemories[x][y][z];
+    VkBuffer *buffer = &scene.vertexbuffers[meshID];
+    VkDeviceMemory *bufferMemory = &scene.vertexbufferMemories[meshID];
     VkBufferUsageFlags usage = vertUsageDstFlags;
     mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
 
     bufferSize = mesh.indexCount * sizeof(uint16_t);
     rawBuffer = mesh.indices;
-    buffer = &scene.indexbuffers[x][y][z];
-    bufferMemory = &scene.indexbufferMemories[x][y][z];
+    buffer = &scene.indexbuffers[meshID];
+    bufferMemory = &scene.indexbufferMemories[meshID];
     usage = indexUsageDstFlags;
     mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
 }
@@ -519,7 +528,7 @@ void mpRenderer::Update(mpCore &core)
     vkUnmapMemory(device, pUniformbufferMemories[imageIndex]);
 
     // Issue new draw commands
-    DrawFrame(*core.region, core.gui, imageIndex);
+    DrawFrame(core.meshRegistry.meshArray, core.gui, imageIndex);
 
     // Check if the previous frame is using this image; it might have a fence to wait on
     if(pInFlightImageFences[imageIndex] != VK_NULL_HANDLE)
@@ -588,15 +597,11 @@ void mpRenderer::Cleanup()
         vkDestroyBuffer(device, texture.pIndexbuffers[i], nullptr);
         vkFreeMemory(device, texture.pIndexbufferMemories[i], nullptr);
     }
-    for(int32_t z = 0; z < MP_REGION_SIZE; z++){
-        for(int32_t y = 0; y < MP_REGION_SIZE; y++){
-            for(int32_t x = 0; x < MP_REGION_SIZE; x++){
-                vkDestroyBuffer(device, scene.indexbuffers[x][y][z], nullptr);
-                vkFreeMemory(device, scene.indexbufferMemories[x][y][z], nullptr);
-                vkDestroyBuffer(device, scene.vertexbuffers[x][y][z], nullptr);
-                vkFreeMemory(device, scene.vertexbufferMemories[x][y][z], nullptr);
-            }
-        }
+    for(uint32_t meshID = 0; meshID < scene.bufferCount; meshID++){
+        vkDestroyBuffer(device, scene.indexbuffers[meshID], nullptr);
+        vkFreeMemory(device, scene.indexbufferMemories[meshID], nullptr);
+        vkDestroyBuffer(device, scene.vertexbuffers[meshID], nullptr);
+        vkFreeMemory(device, scene.vertexbufferMemories[meshID], nullptr);
     }
     for(uint32_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++) {
         vkDestroySemaphore(device, imageAvailableSPs[i], nullptr);
@@ -1228,34 +1233,27 @@ void mpRenderer::mapBufferData(void *rawBuffer, VkDeviceSize bufferSize, VkBuffe
     vkFreeMemory(device, stagingbufferMemory, nullptr);
 }
 
-void mpRenderer::PrepareScenebuffers(mpVoxelRegion *region)
+void mpRenderer::PrepareScenebuffers(const mpMeshArray &meshArray)
 {
     constexpr VkBufferUsageFlags vertUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     constexpr VkBufferUsageFlags indexUsageDstFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-    for(int32_t z = 0; z < MP_REGION_SIZE; z++){
-        for(int32_t y = 0; y < MP_REGION_SIZE; y++){
-            for(int32_t x = 0; x < MP_REGION_SIZE; x++)
-            {
-                const mpMesh &mesh = region->meshArray[x][y][z];
-                if(mesh.vertexCount == 0)
-                    continue;
+    for(uint32_t meshID = 0; meshID < scene.bufferCount; meshID++){
+        const mpMesh &mesh = meshArray.data[meshID];
 
-                VkDeviceSize bufferSize = mesh.vertexCount * sizeof(mpVertex);
-                void *rawBuffer = mesh.vertices;
-                VkBuffer *buffer = &scene.vertexbuffers[x][y][z];
-                VkDeviceMemory *bufferMemory = &scene.vertexbufferMemories[x][y][z];
-                VkBufferUsageFlags usage = vertUsageDstFlags;
-                mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
+        VkDeviceSize bufferSize = mesh.vertexCount * sizeof(mpVertex);
+        void *rawBuffer = mesh.vertices;
+        VkBuffer *buffer = &scene.vertexbuffers[meshID];
+        VkDeviceMemory *bufferMemory = &scene.vertexbufferMemories[meshID];
+        VkBufferUsageFlags usage = vertUsageDstFlags;
+        mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
 
-                bufferSize = mesh.indexCount * sizeof(uint16_t);
-                rawBuffer = mesh.indices;
-                buffer = &scene.indexbuffers[x][y][z];
-                bufferMemory = &scene.indexbufferMemories[x][y][z];
-                usage = indexUsageDstFlags;
-                mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
-            }
-        }
+        bufferSize = mesh.indexCount * sizeof(uint16_t);
+        rawBuffer = mesh.indices;
+        buffer = &scene.indexbuffers[meshID];
+        bufferMemory = &scene.indexbufferMemories[meshID];
+        usage = indexUsageDstFlags;
+        mapBufferData(rawBuffer, bufferSize, buffer, bufferMemory, usage);
     }
 }
 
@@ -1506,7 +1504,7 @@ void mpRenderer::ReCreateSwapchain(int32_t width, int32_t height)
     PrepareCommandbuffers();
 }
 
-void mpRenderer::DrawFrame(const mpVoxelRegion &region, const mpGUI &mpgui, uint32_t imageIndex)
+void mpRenderer::DrawFrame(const mpMeshArray &meshArray, const mpGUI &mpgui, uint32_t imageIndex)
 {
     vkDeviceWaitIdle(device);
     VkCommandBuffer &commandbuffer = pCommandbuffers[imageIndex];
@@ -1541,17 +1539,11 @@ void mpRenderer::DrawFrame(const mpVoxelRegion &region, const mpGUI &mpgui, uint
 
     constexpr VkDeviceSize offsets[] = { 0 };
 
-    for(int32_t z = 0; z < MP_REGION_SIZE; z++){
-        for(int32_t y = 0; y < MP_REGION_SIZE; y++){
-            for(int32_t x = 0; x < MP_REGION_SIZE; x++){
-                const mpMesh &mesh = region.meshArray[x][y][z];
-                if(mesh.vertexCount > 0){
-                    vkCmdBindVertexBuffers(commandbuffer, 0, 1, &scene.vertexbuffers[x][y][z], offsets);
-                    vkCmdBindIndexBuffer(commandbuffer, scene.indexbuffers[x][y][z], 0, VK_INDEX_TYPE_UINT16);
-                    vkCmdDrawIndexed(commandbuffer, mesh.indexCount, 1, 0, 0, 0);
-                }
-            }
-        }
+    for(uint32_t meshID = 0; meshID < meshArray.count; meshID++){
+        const mpMesh &mesh = meshArray.data[meshID];
+        vkCmdBindVertexBuffers(commandbuffer, 0, 1, &scene.vertexbuffers[meshID], offsets);
+        vkCmdBindIndexBuffer(commandbuffer, scene.indexbuffers[meshID], 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(commandbuffer, mesh.indexCount, 1, 0, 0, 0);
     }
 
     vkCmdBindPipeline(commandbuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gui.pipeline);

@@ -242,47 +242,52 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
                     continue;
                 // TODO: Figure out how to do this more elegantly
                 bool32 flagCheck = 1;
+                mpFlags drawFlags = 0;
                 if(x > 0)
                     flagCheck = subRegion.voxels[x - 1][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_SOUTH)
                     flagCheck = region->subRegions[index.x - 1][index.y][index.z].voxels[subRegMax][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_SOUTH;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_SOUTH;
 
                 if(x < subRegMax)
                     flagCheck = subRegion.voxels[x + 1][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_NORTH)
                     flagCheck = region->subRegions[index.x + 1][index.y][index.z].voxels[0][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_NORTH;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_NORTH;
 
                 if(y > 0)
                     flagCheck = subRegion.voxels[x][y - 1][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_WEST)
                     flagCheck = region->subRegions[index.x][index.y - 1][index.z].voxels[x][subRegMax][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_WEST;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_WEST;
 
                 if(y < subRegMax)
                     flagCheck = subRegion.voxels[x][y + 1][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_EAST)
                     flagCheck = region->subRegions[index.x][index.y + 1][index.z].voxels[x][0][z].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_EAST;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_EAST;
 
                 if(z > 0)
                     flagCheck = subRegion.voxels[x][y][z - 1].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM)
                     flagCheck = region->subRegions[index.x][index.y][index.z - 1].voxels[x][y][subRegMax].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_BOTTOM;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_BOTTOM;
 
                 if(z < subRegMax)
                     flagCheck = subRegion.voxels[x][y][z + 1].flags & MP_VOXEL_FLAG_ACTIVE;
                 else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_TOP)
                     flagCheck = region->subRegions[index.x][index.y][index.z + 1].voxels[x][y][0].flags & MP_VOXEL_FLAG_ACTIVE;
                 if(flagCheck == false)
-                    voxel.flags |= MP_VOXEL_FLAG_DRAW_TOP;
+                    drawFlags |= MP_VOXEL_FLAG_DRAW_TOP;
+
+                if(drawFlags)
+                    subRegion.flags |= MP_SUBREG_FLAG_VISIBLE;
+                voxel.flags |= drawFlags;
             }
         }
     }
@@ -324,19 +329,22 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
     return region;
 }
 
-static void mpGenerateMeshes(mpVoxelRegion *region, mpMemoryRegion tempMemory)
+static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mpMemoryRegion tempMemory)
 {
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){
             for(int32_t x = 0; x < MP_REGION_SIZE; x++){
-                // Set draw flags
                 mpVoxelSubRegion &subRegion = region->subRegions[x][y][z];
                 if((subRegion.flags & MP_SUBREG_FLAG_ACTIVE) == false)
                     continue;
 
                 mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
-                // Create mesh
-                mpCreateMesh(subRegion, region->meshArray[x][y][z], tempMemory);
+
+                if((subRegion.flags & MP_SUBREG_FLAG_VISIBLE) == false)
+                    continue;
+                // Generate mesh
+                mpMesh &mesh = mpGetMesh(registry);
+                mpCreateMesh(subRegion, mesh, tempMemory);
             }
         }
     }
@@ -559,8 +567,11 @@ int main(int argc, char *argv[])
         mpFile worldGen = core.callbacks.mpReadFile("../assets/worldGen.mpasset");
         core.region = static_cast<mpVoxelRegion*>(worldGen.handle);
     }
-    mpGenerateMeshes(core.region, tempMemory);
-    // TODO: string type
+
+    core.meshRegistry = mpCreateMeshRegistry(500, 20);
+    mpGenerateMeshes(core.region, core.meshRegistry, tempMemory);
+
+    // TODO: string type for asset path
     const char *textures[] = {
         "../assets/textures/white_pixel.png",
         "../assets/textures/resume.png",
@@ -575,8 +586,6 @@ int main(int argc, char *argv[])
     renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
     renderer.LoadTextures(textures, textureCount);
     renderer.InitResources(core);
-
-    //mpDistribute(core.region, mpSpawnTree, 2);
 
     mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
     mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
@@ -693,6 +702,7 @@ int main(int argc, char *argv[])
             mpDigVoxelSphere(*core.region, core.camera.position, front);
 
         // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of subRegions needing updating rather than a for loop
+#if 0
         for(int32_t z = 0; z < MP_REGION_SIZE; z++){
             for(int32_t y = 0; y < MP_REGION_SIZE; y++){
                 for(int32_t x = 0; x < MP_REGION_SIZE; x++){
@@ -709,6 +719,7 @@ int main(int argc, char *argv[])
                 }
             }
         }
+#endif
         // Renderer :: Render
         renderer.Update(core);
         mpResetMemoryRegion(tempMemory);
@@ -719,9 +730,8 @@ int main(int argc, char *argv[])
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
-    // Renderer needs to clean up before memory is destroyed,
-    // hence a destructor doesn't work here
     renderer.Cleanup();
+    mpDestroyMeshRegistry(core.meshRegistry);
     mpDestroyMemoryRegion(subRegionMemory);
     mpDestroyMemoryRegion(vulkanMemory);
     mpDestroyMemoryRegion(tempMemory);
