@@ -230,7 +230,7 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
     return subRegion;
 }
 
-static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *region, const vec3Int index)
+static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *region)
 {
     constexpr int32_t subRegMax = MP_SUBREGION_SIZE - 1;
     for(int32_t z = 0; z < MP_SUBREGION_SIZE; z++){
@@ -240,6 +240,8 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
                 mpVoxel &voxel = subRegion.voxels[x][y][z];
                 if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
                     continue;
+
+                vec3Int &index = subRegion.index;
                 // TODO: Figure out how to do this more elegantly
                 bool32 flagCheck = 1;
                 mpFlags drawFlags = 0;
@@ -310,6 +312,7 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
                     static_cast<float>(z * MP_SUBREGION_SIZE)
                 };
                 subRegion = mpGenerateTerrain(subRegionPosition);
+                subRegion.index = {x, y, z};
                 // Set neighbour flags
                 if(x > 0)
                     subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_SOUTH;
@@ -338,12 +341,14 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mp
                 if((subRegion.flags & MP_SUBREG_FLAG_ACTIVE) == false)
                     continue;
 
-                mpSetDrawFlags(subRegion, region, vec3Int{x, y, z});
+                mpSetDrawFlags(subRegion, region);
 
                 if((subRegion.flags & MP_SUBREG_FLAG_VISIBLE) == false)
                     continue;
                 // Generate mesh
-                mpMesh &mesh = mpGetMesh(registry);
+                int32_t newIDwrite;
+                mpMesh &mesh = mpGetMesh(registry, &newIDwrite);
+                subRegion.meshID = newIDwrite;
                 mpCreateMesh(subRegion, mesh, tempMemory);
             }
         }
@@ -379,7 +384,7 @@ static mpRayCastHitInfo mpRayCast(mpVoxelRegion &region, const vec3 origin, cons
     }
     return hitInfo;
 }
-
+#if 0
 inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegion *region, const vec3 origin), const int32_t zIndex)
 {
     // TODO: replace rand()
@@ -388,14 +393,27 @@ inline static void mpDistribute(mpVoxelRegion *region, void (*spawn)(mpVoxelRegi
             const mpVoxelSubRegion &subRegion = region->subRegions[x][y][zIndex];
             const vec3 centre = subRegion.position + vec3{MP_SUBREGION_SIZE/2, MP_SUBREGION_SIZE/2, 0.0f};
             const float angle = static_cast<float>(rand());
-            constexpr float length = MP_SUBREGION_SIZE/3;
+            constexpr float length = MP_SUBREGION_SIZE / 3;
             const vec3 direction = {cosf(angle) * length, sinf(angle) * length, 0.0f};
             spawn(region, centre + direction);
         }
     }
 }
+#endif
+inline static void mpDispatchOutOfDateMesh(mpMeshRegistry &meshRegistry, mpVoxelSubRegion &subRegion)
+{
+    if((subRegion.flags & MP_SUBREG_FLAG_OUT_OF_DATE) == 0){
+        mpMeshQueueData queueData;
+        queueData.mesh = &meshRegistry.meshArray.data[subRegion.meshID];
+        queueData.subRegion = &subRegion;
+
+        mpEnqueueMesh(meshRegistry, queueData);
+        subRegion.flags |= MP_SUBREG_FLAG_OUT_OF_DATE;
+        MP_PUTS_TRACE("Mesh enqueued");
+    }
+}
 // TODO: optimise
-static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
+static void mpCreateVoxelSphere(mpMeshRegistry &meshRegistry, mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
     const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction, 4);
     if(rayCastHit.voxel == nullptr)
@@ -428,7 +446,7 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
                         voxel.colour.r += colourIncrement;
                         voxel.colour.g += colourIncrement;
                         voxel.colour.b += colourIncrement;
-                        subRegion->flags |= MP_SUBREG_FLAG_DIRTY | MP_SUBREG_FLAG_ACTIVE;
+                        mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
                     }
                 }
             }
@@ -436,7 +454,7 @@ static void mpCreateVoxelSphere(mpVoxelRegion &region, const vec3 origin, const 
     }
 }
 // TODO: optimise
-static void mpDigVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec3 direction)
+static void mpDigVoxelSphere(mpMeshRegistry &meshRegistry, mpVoxelRegion &region, const vec3 origin, const vec3 direction)
 {
     const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
     if(rayCastHit.voxel == nullptr)
@@ -463,14 +481,14 @@ static void mpDigVoxelSphere(mpVoxelRegion &region, const vec3 origin, const vec
                             continue;
 
                         voxel.flags = 0;
-                        subRegion->flags |= MP_SUBREG_FLAG_DIRTY;
+                        mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
                     }
                 }
             }
         }
     }
 }
-
+#if 0
 inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, const vec3 direction, uint32_t rgba)
 {
     const mpRayCastHitInfo rayCastHit = mpRayCast(region, origin, direction);
@@ -497,6 +515,7 @@ inline static void mpCreateVoxelBlock(mpVoxelRegion &region, const vec3 origin, 
         }
     }
 }
+#endif
 // TODO: optimise TODO: Jumping
 static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float timestep)
 {
@@ -696,30 +715,20 @@ int main(int argc, char *argv[])
         mpEntityPhysics(*core.region, player, timestep);
 
         // Game events :: raycasthits
-        if(PlatformIsKeyDown(MP_KEY_LMBUTTON))
-            mpCreateVoxelSphere(*core.region, core.camera.position, front);
-        else if(PlatformIsKeyDown(MP_KEY_RMBUTTON))
-            mpDigVoxelSphere(*core.region, core.camera.position, front);
+        if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT)
+            mpCreateVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
+        else if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_RIGHT)
+            mpDigVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
 
-        // Core :: Recreate dirty meshes & vulkan buffers // TODO: manage a list of subRegions needing updating rather than a for loop
-#if 0
-        for(int32_t z = 0; z < MP_REGION_SIZE; z++){
-            for(int32_t y = 0; y < MP_REGION_SIZE; y++){
-                for(int32_t x = 0; x < MP_REGION_SIZE; x++){
-                    mpVoxelSubRegion &subRegion = core.region->subRegions[x][y][z];
-                    if(subRegion.flags & MP_SUBREG_FLAG_DIRTY){
-                        mpSetDrawFlags(subRegion, core.region, vec3Int{x, y, z});
-
-                        mpMesh &mesh = core.region->meshArray[x][y][z];
-                        mpCreateMesh(subRegion, mesh, tempMemory);
-                        subRegion.flags &= ~MP_SUBREG_FLAG_DIRTY;
-                        constexpr uint32_t regionSize2x = MP_REGION_SIZE * MP_REGION_SIZE;
-                        renderer.RecreateSceneBuffer(mesh, x, y, z);
-                    }
-                }
-            }
+        // Core :: Dequeue and recreate outofdate meshes
+        while(core.meshRegistry.reQueue.front != nullptr){
+            mpMeshQueueData queueData = mpDequeueMesh(core.meshRegistry);
+            mpSetDrawFlags(*queueData.subRegion, core.region);
+            mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
+            queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
+            renderer.RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
+            MP_PUTS_TRACE("Mesh dequeued");
         }
-#endif
         // Renderer :: Render
         renderer.Update(core);
         mpResetMemoryRegion(tempMemory);

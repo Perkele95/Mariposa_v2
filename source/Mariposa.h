@@ -70,9 +70,9 @@ struct mpRayCastHitInfo
  *  Mesh Registry
  */
 
-// Create mesh registry -> set inital size, list and queue
 inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queueCapacity)
 {
+    constexpr mpMeshQueueData INIT_QUEUE_DATA = {nullptr, nullptr};
     mpMeshRegistry registry = {};
 
     // Init mesharray
@@ -89,11 +89,11 @@ inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queue
     // Init queue free list
     registry.reQueue.freeListHead = static_cast<mpMeshQueueItem*>(mpAlloc(registry.queueMemory, queueCapacity * sizeof(mpMeshQueueItem)));
     for(uint32_t i = 0; i < queueCapacity - 1; i++){
-        registry.reQueue.freeListHead[i].data = nullptr;
+        registry.reQueue.freeListHead[i].data = INIT_QUEUE_DATA;
         registry.reQueue.freeListHead[i].next = &registry.reQueue.freeListHead[i + 1];
     }
     // Last element in freelist has no next element
-    registry.reQueue.freeListHead[queueCapacity - 1].data = nullptr;
+    registry.reQueue.freeListHead[queueCapacity - 1].data = INIT_QUEUE_DATA;
     registry.reQueue.freeListHead[queueCapacity - 1].next = nullptr;
 
     return registry;
@@ -105,23 +105,24 @@ inline void mpDestroyMeshRegistry(mpMeshRegistry &registry)
     mpDestroyMemoryRegion(registry.queueMemory);
     memset(&registry, 0, sizeof(mpMeshRegistry));
 }
-
-inline mpMesh &mpGetMesh(mpMeshRegistry &registry)
+// outMeshID is not optional
+inline mpMesh &mpGetMesh(mpMeshRegistry &registry, int32_t *outMeshID)
 {
     if(registry.meshArray.count + 1 > registry.meshArray.max){
         registry.meshArray.max *= 2;
         mpResizeMemory(registry.meshArrayMemory, sizeof(mpMesh) * registry.meshArray.max);
     }
     mpMesh &result = registry.meshArray.data[registry.meshArray.count];
+    *outMeshID = registry.meshArray.count;
     registry.meshArray.count++;
     return result;
 }
 // TODO
-inline void mpReplaceMesh(mpMeshRegistry &registry, mpMesh *oldMesh, mpMesh *newMesh);
+inline void mpReplaceMesh(mpMeshRegistry &registry, mpMesh &oldMesh, mpMesh &newMesh);
 // TODO
-inline void mpDeregisterMesh(mpMeshRegistry &registry, mpMesh *mesh);
+inline void mpDeregisterMesh(mpMeshRegistry &registry, mpMesh &mesh);
 
-inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMesh *mesh)
+inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMeshQueueData &queueData)
 {
     mpMeshQueue &queue = registry.reQueue;
     if(queue.freeListHead == nullptr){
@@ -129,27 +130,42 @@ inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMesh *mesh)
         MP_PUTS_WARN("MESHQUEUE WARNING, enqueue denied: queue full");
         return;
     }
-    if(queue.front == nullptr)
-        queue.front = queue.freeListHead;
-    queue.rear->next = queue.freeListHead;
-    queue.rear = queue.freeListHead;
-    queue.rear->data = mesh;
+    mpMeshQueueItem *enqeuedItem = queue.freeListHead;
     queue.freeListHead = queue.freeListHead->next;
+
+    if(queue.front == nullptr){
+        queue.front = enqeuedItem;
+        queue.rear = enqeuedItem;
+    }
+    else{
+        queue.rear->next = enqeuedItem;
+        queue.rear = enqeuedItem;
+    }
+    enqeuedItem->data = queueData;
+    enqeuedItem->next = nullptr;// <- NOTE: perhaps not required
 }
 
-inline mpMesh *mpDequeueMesh(mpMeshRegistry &registry)
+inline mpMeshQueueData mpDequeueMesh(mpMeshRegistry &registry)
 {
     mpMeshQueue &queue = registry.reQueue;
+#ifdef MP_INTERNAL
     if(queue.front == nullptr){
         MP_PUTS_WARN("MESHQUEUE WARNING, dequeue denied: queue empty");
-        return nullptr;
+        mp_assert(0)
     }
-    mpMesh *result = queue.front->data;
-    if(queue.front == queue.rear)
+#endif
+    mpMeshQueueData result = queue.front->data;
+    if(queue.front == queue.rear){
+        queue.front->next = queue.freeListHead;
+        queue.freeListHead = queue.front;
         queue.front = nullptr;
-    else
+        queue.rear = nullptr;
+    }
+    else{
+        mpMeshQueueItem *dequeuedItem = queue.front;
         queue.front = queue.front->next;
-    queue.front->next = queue.freeListHead;
-    queue.freeListHead = queue.front;
+        dequeuedItem->next = queue.freeListHead;
+        queue.freeListHead = dequeuedItem;
+    }
     return result;
 }
