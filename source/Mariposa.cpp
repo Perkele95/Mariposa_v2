@@ -230,9 +230,17 @@ static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
     return subRegion;
 }
 
-static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *region)
+inline static void mpSetVoxelDrawFlag(mpVoxel &neighbour, mpVoxel &voxel, mpVoxelFlags drawFlag)
 {
-    constexpr int32_t subRegMax = MP_SUBREGION_SIZE - 1;
+    if((neighbour.flags & MP_VOXEL_FLAG_ACTIVE) == false)
+        voxel.flags |= drawFlag;
+}
+
+static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, mpVoxelRegion *region)
+{
+    constexpr int32_t srMax = MP_SUBREGION_SIZE - 1;
+    constexpr int32_t rMax = MP_REGION_SIZE - 1;
+
     for(int32_t z = 0; z < MP_SUBREGION_SIZE; z++){
         for(int32_t y = 0; y < MP_SUBREGION_SIZE; y++){
             for(int32_t x = 0; x < MP_SUBREGION_SIZE; x++)
@@ -241,55 +249,67 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, const mpVoxelRegion *reg
                 if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
                     continue;
 
-                vec3Int &index = subRegion.index;
-                // TODO: Figure out how to do this more elegantly
-                bool32 flagCheck = 1;
-                mpFlags drawFlags = 0;
-                if(x > 0)
-                    flagCheck = subRegion.voxels[x - 1][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_SOUTH)
-                    flagCheck = region->subRegions[index.x - 1][index.y][index.z].voxels[subRegMax][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_SOUTH;
+                vec3Int &SRI = subRegion.index;
 
-                if(x < subRegMax)
-                    flagCheck = subRegion.voxels[x + 1][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_NORTH)
-                    flagCheck = region->subRegions[index.x + 1][index.y][index.z].voxels[0][y][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_NORTH;
+                if(x > 0){
+                    mpVoxel &neighbour = subRegion.voxels[x - 1][y][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_SOUTH);
+                }
+                else if(SRI.x > 0){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x - 1][SRI.y][SRI.z];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[srMax][y][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_SOUTH);
+                }
 
-                if(y > 0)
-                    flagCheck = subRegion.voxels[x][y - 1][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_WEST)
-                    flagCheck = region->subRegions[index.x][index.y - 1][index.z].voxels[x][subRegMax][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_WEST;
+                if(x < srMax){
+                    mpVoxel &neighbour = subRegion.voxels[x + 1][y][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_NORTH);
+                }
+                else if(SRI.x < rMax){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x + 1][SRI.y][SRI.z];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[0][y][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_NORTH);
+                }
 
-                if(y < subRegMax)
-                    flagCheck = subRegion.voxels[x][y + 1][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_EAST)
-                    flagCheck = region->subRegions[index.x][index.y + 1][index.z].voxels[x][0][z].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_EAST;
+                if(y > 0){
+                    mpVoxel &neighbour = subRegion.voxels[x][y - 1][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_WEST);
+                }
+                else if(SRI.y > 0){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x][SRI.y - 1][SRI.z];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[x][srMax][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_WEST);
+                }
 
-                if(z > 0)
-                    flagCheck = subRegion.voxels[x][y][z - 1].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM)
-                    flagCheck = region->subRegions[index.x][index.y][index.z - 1].voxels[x][y][subRegMax].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_BOTTOM;
+                if(y < srMax){
+                    mpVoxel &neighbour = subRegion.voxels[x][y + 1][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_EAST);
+                }
+                else if(SRI.y < rMax){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x][SRI.y + 1][SRI.z];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[x][0][z];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_EAST);
+                }
 
-                if(z < subRegMax)
-                    flagCheck = subRegion.voxels[x][y][z + 1].flags & MP_VOXEL_FLAG_ACTIVE;
-                else if(subRegion.flags & MP_SUBREG_FLAG_NEIGHBOUR_TOP)
-                    flagCheck = region->subRegions[index.x][index.y][index.z + 1].voxels[x][y][0].flags & MP_VOXEL_FLAG_ACTIVE;
-                if(flagCheck == false)
-                    drawFlags |= MP_VOXEL_FLAG_DRAW_TOP;
+                if(z > 0){
+                    mpVoxel &neighbour = subRegion.voxels[x][y][z - 1];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_BOTTOM);
+                }
+                else if(SRI.z > 0){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x][SRI.y][SRI.z - 1];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[x][y][srMax];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_BOTTOM);
+                }
 
-                if(drawFlags)
-                    subRegion.flags |= MP_SUBREG_FLAG_VISIBLE;
-                voxel.flags |= drawFlags;
+                if(z < srMax){
+                    mpVoxel &neighbour = subRegion.voxels[x][y][z + 1];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_TOP);
+                }
+                else if(SRI.z < rMax){
+                    mpVoxelSubRegion &neighbourSubReg = region->subRegions[SRI.x][SRI.y][SRI.z + 1];
+                    mpVoxel &neighbour = neighbourSubReg.voxels[x][y][0];
+                    mpSetVoxelDrawFlag(neighbour, voxel, MP_VOXEL_FLAG_DRAW_TOP);
+                }
             }
         }
     }
@@ -299,13 +319,10 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
 {
     mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAlloc(regionMemory, sizeof(mpVoxelRegion)));
     // Set active flag on voxels
-    constexpr int32_t regionMax = MP_REGION_SIZE - 1;
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){
             for(int32_t x = 0; x < MP_REGION_SIZE; x++){
-                // Set neighbour flags
                 mpVoxelSubRegion &subRegion = region->subRegions[x][y][z];
-                // Generate terrain
                 const vec3 subRegionPosition = {
                     static_cast<float>(x * MP_SUBREGION_SIZE),
                     static_cast<float>(y * MP_SUBREGION_SIZE),
@@ -313,19 +330,6 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
                 };
                 subRegion = mpGenerateTerrain(subRegionPosition);
                 subRegion.index = {x, y, z};
-                // Set neighbour flags
-                if(x > 0)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_SOUTH;
-                if(x < regionMax)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_NORTH;
-                if(y > 0)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_WEST;
-                if(y < regionMax)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_EAST;
-                if(z > 0)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_BOTTOM;
-                if(z < regionMax)
-                    subRegion.flags |= MP_SUBREG_FLAG_NEIGHBOUR_TOP;
             }
         }
     }
@@ -342,9 +346,6 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mp
                     continue;
 
                 mpSetDrawFlags(subRegion, region);
-
-                if((subRegion.flags & MP_SUBREG_FLAG_VISIBLE) == false)
-                    continue;
                 // Generate mesh
                 int32_t newIDwrite;
                 mpMesh &mesh = mpGetMesh(registry, &newIDwrite);
@@ -409,7 +410,6 @@ inline static void mpDispatchOutOfDateMesh(mpMeshRegistry &meshRegistry, mpVoxel
 
         mpEnqueueMesh(meshRegistry, queueData);
         subRegion.flags |= MP_SUBREG_FLAG_OUT_OF_DATE;
-        MP_PUTS_TRACE("Mesh enqueued");
     }
 }
 // TODO: optimise
@@ -727,7 +727,6 @@ int main(int argc, char *argv[])
             mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
             queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
             renderer.RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
-            MP_PUTS_TRACE("Mesh dequeued");
         }
         // Renderer :: Render
         renderer.Update(core);

@@ -1240,6 +1240,8 @@ void mpRenderer::PrepareScenebuffers(const mpMeshArray &meshArray)
 
     for(uint32_t meshID = 0; meshID < scene.bufferCount; meshID++){
         const mpMesh &mesh = meshArray.data[meshID];
+        if(mesh.vertexCount == 0)
+            continue;
 
         VkDeviceSize bufferSize = mesh.vertexCount * sizeof(mpVertex);
         void *rawBuffer = mesh.vertices;
@@ -1541,6 +1543,9 @@ void mpRenderer::DrawFrame(const mpMeshArray &meshArray, const mpGUI &mpgui, uin
 
     for(uint32_t meshID = 0; meshID < meshArray.count; meshID++){
         const mpMesh &mesh = meshArray.data[meshID];
+        if(mesh.vertexCount == 0)
+            continue;
+
         vkCmdBindVertexBuffers(commandbuffer, 0, 1, &scene.vertexbuffers[meshID], offsets);
         vkCmdBindIndexBuffer(commandbuffer, scene.indexbuffers[meshID], 0, VK_INDEX_TYPE_UINT16);
         vkCmdDrawIndexed(commandbuffer, mesh.indexCount, 1, 0, 0, 0);
