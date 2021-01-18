@@ -1,6 +1,7 @@
 #include "Mariposa.h"
 #include "Win32_Mariposa.h"
 #include "renderer\renderer.hpp"
+#include "job_system.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -347,9 +348,7 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mp
 
                 mpSetDrawFlags(subRegion, region);
                 // Generate mesh
-                int32_t newIDwrite;
-                mpMesh &mesh = mpGetMesh(registry, &newIDwrite);
-                subRegion.meshID = newIDwrite;
+                mpMesh &mesh = mpGetMesh(registry, &subRegion.meshID);
                 mpCreateMesh(subRegion, mesh, tempMemory);
             }
         }
@@ -430,25 +429,26 @@ static void mpCreateVoxelSphere(mpMeshRegistry &meshRegistry, mpVoxelRegion &reg
                 const vec3 target = rayCastHit.position + mpVec3IntToVec3(vec3Int{x,y,z});
                 mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, target);
 
-                if(subRegion != nullptr){
-                    const vec3 localHit = target - subRegion->position;
+                if(subRegion == nullptr)
+                    continue;
 
-                    if(vec3Length(target - rayCastHit.position) < radius){
-                        const vec3Int index = mpVec3ToVec3Int(localHit);
-                        mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
-                        if(voxel.flags & MP_VOXEL_FLAG_ACTIVE)
-                            continue;
+                const vec3 localHit = target - subRegion->position;
+                if(vec3Length(target - rayCastHit.position) >= radius)
+                    continue;
 
-                        voxel.flags = MP_VOXEL_FLAG_ACTIVE;
-                        voxel.colour.rgba = 0x050505FF;
+                const vec3Int index = mpVec3ToVec3Int(localHit);
+                mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
+                if(voxel.flags & MP_VOXEL_FLAG_ACTIVE)
+                    continue;
 
-                        const uint8_t colourIncrement = static_cast<uint8_t>(z + zOffset) * 12 + mpRandomUint8();
-                        voxel.colour.r += colourIncrement;
-                        voxel.colour.g += colourIncrement;
-                        voxel.colour.b += colourIncrement;
-                        mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
-                    }
-                }
+                voxel.flags = MP_VOXEL_FLAG_ACTIVE;
+                voxel.colour.rgba = 0x050505FF;
+
+                const uint8_t colourIncrement = static_cast<uint8_t>(z + zOffset) * 12 + mpRandomUint8();
+                voxel.colour.r += colourIncrement;
+                voxel.colour.g += colourIncrement;
+                voxel.colour.b += colourIncrement;
+                mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
             }
         }
     }
@@ -471,19 +471,21 @@ static void mpDigVoxelSphere(mpMeshRegistry &meshRegistry, mpVoxelRegion &region
                 const vec3 target = rayCastHit.position + mpVec3IntToVec3(vec3Int{x,y,z});
                 mpVoxelSubRegion *subRegion = mpGetContainintSubRegion(region, target);
 
-                if(subRegion != nullptr){
-                    const vec3 localHit = target - subRegion->position;
+                if(subRegion == nullptr)
+                    continue;
 
-                    if(vec3Length(target - rayCastHit.position) < radius){
-                        const vec3Int index = mpVec3ToVec3Int(localHit);
-                        mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
-                        if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
-                            continue;
+                const vec3 localHit = target - subRegion->position;
 
-                        voxel.flags = 0;
-                        mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
-                    }
-                }
+                if(vec3Length(target - rayCastHit.position) >= radius)
+                    continue;
+
+                const vec3Int index = mpVec3ToVec3Int(localHit);
+                mpVoxel &voxel = subRegion->voxels[index.x][index.y][index.z];
+                if((voxel.flags & MP_VOXEL_FLAG_ACTIVE) == false)
+                    continue;
+
+                voxel.flags = 0;
+                mpDispatchOutOfDateMesh(meshRegistry, *subRegion);
             }
         }
     }
@@ -558,8 +560,23 @@ inline static void mpPrintMemoryInfo(mpMemoryRegion region, const char *name)
 {
     MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->contentSize / 1000), (region->totalSize) / 1000)
 }
+#if 0
+int32_t mpRenderThread(void *parameter)
+{
+    mpCore &core = *(static_cast<mpCore*>(parameter));
 
-static void mpProcessGameStateActive(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory, mpEntity &player)
+    mpThreadContext context;
+    context.ID = PlatformGetThreadID();
+    MP_PUTS_INFO("-------------------------")
+    MP_LOG_INFO("New thread(%d) created\n", context.ID)
+
+    while (core.windowInfo.running){
+    }
+
+    return 0;
+}
+#endif
+static void mpProcessGameStateActive(mpCore &core, const float timestep, mpMemoryRegion tempMemory, mpEntity &player)
 {
     // Core :: gamestate switch
     if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
@@ -586,7 +603,7 @@ static void mpProcessGameStateActive(mpCore &core, mpRenderer &renderer, const f
         core.camera.pitch = -core.camera.pitchClamp;
 
     mpGuiEnd(core.gui);
-    renderer.RecreateGuiBuffers(core.gui);
+    core.renderer->RecreateGuiBuffers(core.gui);
     // Core :: Get camera vectors
     const float yawCos = cosf(core.camera.yaw);
     const float yawSin = sinf(core.camera.yaw);
@@ -607,13 +624,15 @@ static void mpProcessGameStateActive(mpCore &core, mpRenderer &renderer, const f
     // Core :: Update camera matrices
     core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
     core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
-    core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
+    const float projWidth = static_cast<float>(core.windowInfo.width);
+    const float projHeight = static_cast<float>(core.windowInfo.height);
+    core.camera.projection = Perspective(core.camera.fov, projWidth / projHeight, 0.1f, 100.0f);
 
     // Game events :: Physics update
     mpEntityPhysics(*core.region, player, timestep);
 
     // Game events :: raycasthits
-    if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT)
+    if(PlatformIsKeyDown(MP_KEY_LMBUTTON))
         mpCreateVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
     else if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_RIGHT)
         mpDigVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
@@ -624,13 +643,13 @@ static void mpProcessGameStateActive(mpCore &core, mpRenderer &renderer, const f
         mpSetDrawFlags(*queueData.subRegion, core.region);
         mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
         queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
-        renderer.RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
+        core.renderer->RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
     }
     // Renderer :: Render
-    renderer.Update(core);
+    core.renderer->Update(core);
 }
 
-static void mpProcessGameStatePaused(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory)
+static void mpProcessGameStatePaused(mpCore &core, const float timestep, mpMemoryRegion tempMemory)
 {
     // Core :: gamestate switch
     if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
@@ -655,14 +674,16 @@ static void mpProcessGameStatePaused(mpCore &core, mpRenderer &renderer, const f
     }
     // Core :: gui end
     mpGuiEnd(core.gui);
-    renderer.RecreateGuiBuffers(core.gui);
+    core.renderer->RecreateGuiBuffers(core.gui);
     // Core :: camera
-    core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
+    const float projWidth = static_cast<float>(core.windowInfo.width);
+    const float projHeight = static_cast<float>(core.windowInfo.height);
+    core.camera.projection = Perspective(core.camera.fov, projWidth / projHeight, 0.1f, 100.0f);
     // Renderer :: Render
-    renderer.Update(core);
+    core.renderer->Update(core);
 }
 
-static void mpProcessGameStateMainMenu(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory)
+static void mpProcessGameStateMainMenu(mpCore &core, const float timestep, mpMemoryRegion tempMemory)
 {
     //
 }
@@ -682,9 +703,9 @@ int main(int argc, char *argv[])
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
 
+    mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
     mpMemoryRegion subRegionMemory = mpCreateMemoryRegion(MegaBytes(100));
     mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
-    mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
 
     if(core.renderFlags & MP_RENDER_FLAG_REGENERATE_WORLD){
         core.region = mpGenerateWorldData(subRegionMemory);
@@ -708,17 +729,15 @@ int main(int argc, char *argv[])
         "../assets/textures/quit.png",
     };
     constexpr uint32_t textureCount = arraysize(textures);
-    core.gui = mpGuiInitialise(5, textureCount);
-
-    mpRenderer renderer = {};
+    mpRenderer renderer;
     memset(&renderer, 0, sizeof(mpRenderer));
     renderer.LinkMemory(vulkanMemory, tempMemory);
     renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
     renderer.LoadTextures(textures, textureCount);
     renderer.InitResources(core);
+    core.renderer = &renderer;
 
-    mpPrintMemoryInfo(subRegionMemory, "subRegionMemory");
-    mpPrintMemoryInfo(vulkanMemory, "vulkanMemory");
+    core.gui = mpGuiInitialise(5, textureCount);
 
     core.camera.speed = 10.0f;
     core.camera.sensitivity = 0.3f;
@@ -746,6 +765,10 @@ int main(int argc, char *argv[])
     if(core.gameState == MP_GAMESTATE_ACTIVE)
         PlatformSetCursorVisbility(0);
 
+    // Multithreading
+    //void *threadParam = &core;
+    //PlatformCreateThread(mpRenderThread, threadParam);
+
     core.windowInfo.running = true;
     core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
@@ -760,13 +783,13 @@ int main(int argc, char *argv[])
         switch (core.gameState)
         {
         case MP_GAMESTATE_ACTIVE:
-            mpProcessGameStateActive(core, renderer, timestep, tempMemory, player);
+            mpProcessGameStateActive(core, timestep, tempMemory, player);
             break;
         case MP_GAMESTATE_PAUSED:
-            mpProcessGameStatePaused(core, renderer, timestep, tempMemory);
+            mpProcessGameStatePaused(core, timestep, tempMemory);
             break;
         case MP_GAMESTATE_MAINMENU:
-            mpProcessGameStateMainMenu(core, renderer, timestep, tempMemory);
+            mpProcessGameStateMainMenu(core, timestep, tempMemory);
             break;
 
         default:
@@ -782,10 +805,8 @@ int main(int argc, char *argv[])
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
-    renderer.Cleanup();
     mpDestroyMeshRegistry(core.meshRegistry);
     mpDestroyMemoryRegion(subRegionMemory);
-    mpDestroyMemoryRegion(vulkanMemory);
     mpDestroyMemoryRegion(tempMemory);
 
     return 0;

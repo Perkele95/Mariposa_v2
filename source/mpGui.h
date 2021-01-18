@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mp_maths.hpp"
-#include "memory.h"
+#include "mp_allocator.hpp"
 
 typedef int32_t bool32;
 
@@ -49,7 +49,7 @@ struct mpGUI
     }state;
 
     mpPoint extent;
-    mpMemoryRegion memory;
+    mpAllocator allocator;
     mpGuiMesh *meshes;
     uint32_t meshCount;
     uint32_t maxElementsPerTexture;

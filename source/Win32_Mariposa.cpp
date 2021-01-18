@@ -140,6 +140,20 @@ mpCallbacks PlatformGetCallbacks()
     return callbacks;
 }
 
+void PlatformCreateThread(mpThreadProc threadProc, void *parameter)
+{
+    LPTHREAD_START_ROUTINE winProc = reinterpret_cast<LPTHREAD_START_ROUTINE>(threadProc);
+    HANDLE newThread = CreateThread(NULL, 0, winProc, parameter, 0, NULL);
+    CloseHandle(newThread);
+}
+
+int32_t PlatformGetThreadID()
+{
+    HANDLE thread = GetCurrentThread();
+    int32_t result = GetThreadId(thread);
+    return result;
+}
+
 static void Win32ToggleFullScreen()
 {
     // Thanks to Raymond Chan we can do this:

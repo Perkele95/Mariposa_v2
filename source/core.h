@@ -20,7 +20,7 @@
     #define PROFILER_ENABLE
 #endif
 
-#include "memory.h"
+#include "mp_allocator.hpp"
 #include "logger.h"//TODO: exclude this from release mode
 #include "profiler.h"//TODO: exclude this from release mode
 #include "mpGui.h"
@@ -72,7 +72,7 @@ struct mpCallbacks
     bool32 (*mpWriteFile)(const char *filename, mpFile *file);
 };
 
-typedef void (*mpThreadProc)(void*);
+typedef int32_t (*mpThreadProc)(void *parameter);
 struct mpThreadContext
 {
     int32_t ID;
@@ -229,6 +229,7 @@ struct mpMeshRegistry
     mpMemoryRegion queueMemory;
 };
 
+struct mpRenderer;
 struct mpCore
 {
     const char *name;
@@ -241,6 +242,7 @@ struct mpCore
 
     mpCamera camera;
 
+    mpRenderer *renderer;
     mpFlags renderFlags;
     mpVoxelRegion *region;
     mpMeshRegistry meshRegistry;
