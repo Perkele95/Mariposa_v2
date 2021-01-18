@@ -61,20 +61,20 @@ inline static mpQuad mpCreateQuad(const mpQuadFaceArray &quadFace, vec3 offset, 
 
     return quad;
 }
-// mpCreateMesh resets tempMemory after use.
-static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpMemoryRegion tempMemory)
+// mpCreateMesh resets tempAllocator after use.
+static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpAllocator tempAllocator)
 {
     constexpr float VOXEL_SCALE = 0.5f;
     constexpr uint16_t vertexStride = 4;
     constexpr uint16_t indexStride = 6;
     uint16_t vertexCount = 0, indexCount = 0;
 
-    constexpr size_t tempVertBlockSize = sizeof(mpVertex) * 12 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
-    mpVertex *tempBlockVertices = static_cast<mpVertex*>(mpAlloc(tempMemory, tempVertBlockSize));
+    constexpr size_t tempVertBlockCount = 12 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
+    mpVertex *tempBlockVertices = mpAllocate<mpVertex>(tempAllocator, tempVertBlockCount);
     mpVertex *tempBlockVertIncrementer = tempBlockVertices;
 
-    constexpr size_t tempIndexBlockSize = sizeof(uint16_t) * 18 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
-    uint16_t *tempBlockIndices = static_cast<uint16_t*>(mpAlloc(tempMemory, tempIndexBlockSize));
+    constexpr size_t tempIndexBlockCount = 18 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
+    mpVertex *tempBlockIndices = mpAllocate<uint16_t>(tempAllocator, tempIndexBlockCount);
     uint16_t *tempBlockIndexIncrementer = tempBlockIndices;
 
     constexpr size_t vertexCopySize = sizeof(mpVertex) * vertexStride;
@@ -92,7 +92,7 @@ static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpMemoryRegi
 
                 if(voxel.flags & MP_VOXEL_FLAG_DRAW_NORTH){
                     const mpQuad quad = mpCreateQuad(mpQuadFaceNorth, positionOffset, colour, VOXEL_SCALE, vertexCount);
-
+                    // TODO: replace with allocator instead of doing it manually
                     memcpy(tempBlockVertIncrementer, quad.vertices, vertexCopySize);
                     memcpy(tempBlockIndexIncrementer, quad.indices, indexCopySize);
 
@@ -163,20 +163,19 @@ static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpMemoryRegi
     const size_t indicesSize = indexCount * sizeof(uint16_t);
     mesh.vertexCount = vertexCount;
     mesh.indexCount = indexCount;
-    if(mesh.memReg == nullptr){
-        mesh.memReg = mpCreateMemoryRegion(verticesSize + indicesSize);
+    if(mesh.allocator == nullptr){
+        mesh.allocator = mpCreateMemoryRegion(verticesSize + indicesSize);
     }
-    else if(mesh.memReg->totalSize < verticesSize + indicesSize){
-        mpDestroyMemoryRegion(mesh.memReg);
-        mesh.memReg = mpCreateMemoryRegion(verticesSize + indicesSize);
-    }
-    mpResetMemoryRegion(mesh.memReg);
-    mesh.vertices = static_cast<mpVertex*>(mpAlloc(mesh.memReg, verticesSize));
-    mesh.indices = static_cast<uint16_t*>(mpAlloc(mesh.memReg, indicesSize));
+    else if(mesh.allocator->maxSize < verticesSize + indicesSize)
+        mpResizeAllocator(mesh.allocator, verticesSize + indicesSize);
+
+    mpResetAllocator(mesh.allocator);
+    mesh.vertices = mpAllocate<mpVertex>(mesh.allocator, vertexCount);
+    mesh.indices = mpAllocate<uint16_t>(mesh.allocator, indexCount);
 
     memcpy(mesh.vertices, tempBlockVertices, verticesSize);
     memcpy(mesh.indices, tempBlockIndices, indicesSize);
-    mpResetMemoryRegion(tempMemory);
+    mpResetAllocator(tempAllocator);
 }
 // TODO: function should take a seed to generate multiple worlds as well as regenerate the same world from a seed
 static mpVoxelSubRegion mpGenerateTerrain(const vec3 subRegionPosition)
@@ -316,9 +315,9 @@ static void mpSetDrawFlags(mpVoxelSubRegion &subRegion, mpVoxelRegion *region)
     }
 }
 
-static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
+static mpVoxelRegion *mpGenerateWorldData(mpAllocator worldDataAllocator)
 {
-    mpVoxelRegion *region = static_cast<mpVoxelRegion*>(mpAlloc(regionMemory, sizeof(mpVoxelRegion)));
+    mpVoxelRegion *region = mpAllocate<mpVoxelRegion>(worldDataAllocator, 1);
     // Set active flag on voxels
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){
@@ -337,7 +336,7 @@ static mpVoxelRegion *mpGenerateWorldData(mpMemoryRegion regionMemory)
     return region;
 }
 
-static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mpMemoryRegion tempMemory)
+static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mpAllocator tempAllocator)
 {
     for(int32_t z = 0; z < MP_REGION_SIZE; z++){
         for(int32_t y = 0; y < MP_REGION_SIZE; y++){
@@ -349,7 +348,7 @@ static void mpGenerateMeshes(mpVoxelRegion *region, mpMeshRegistry &registry, mp
                 mpSetDrawFlags(subRegion, region);
                 // Generate mesh
                 mpMesh &mesh = mpGetMesh(registry, &subRegion.meshID);
-                mpCreateMesh(subRegion, mesh, tempMemory);
+                mpCreateMesh(subRegion, mesh, tempAllocator);
             }
         }
     }
@@ -556,9 +555,9 @@ static void mpEntityPhysics(mpVoxelRegion &region, mpEntity &entity, float times
     }
 }
 
-inline static void mpPrintMemoryInfo(mpMemoryRegion region, const char *name)
+inline static void mpPrintMemoryInfo(mpAllocator allocator, const char *name)
 {
-    MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->contentSize / 1000), (region->totalSize) / 1000)
+    MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (allocator->size / 1000), (allocator->maxSize) / 1000)
 }
 #if 0
 int32_t mpRenderThread(void *parameter)
@@ -576,7 +575,7 @@ int32_t mpRenderThread(void *parameter)
     return 0;
 }
 #endif
-static void mpProcessGameStateActive(mpCore &core, const float timestep, mpMemoryRegion tempMemory, mpEntity &player)
+static void mpProcessGameStateActive(mpCore &core, const float timestep, mpAllocator tempAllocator, mpEntity &player)
 {
     // Core :: gamestate switch
     if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
@@ -641,7 +640,7 @@ static void mpProcessGameStateActive(mpCore &core, const float timestep, mpMemor
     while(core.meshRegistry.queue.front != nullptr){
         mpMeshQueueData queueData = mpDequeueMesh(core.meshRegistry);
         mpSetDrawFlags(*queueData.subRegion, core.region);
-        mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
+        mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempAllocator);
         queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
         core.renderer->RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
     }
@@ -649,7 +648,7 @@ static void mpProcessGameStateActive(mpCore &core, const float timestep, mpMemor
     core.renderer->Update(core);
 }
 
-static void mpProcessGameStatePaused(mpCore &core, const float timestep, mpMemoryRegion tempMemory)
+static void mpProcessGameStatePaused(mpCore &core, const float timestep, mpAllocator tempAllocator)
 {
     // Core :: gamestate switch
     if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
@@ -683,7 +682,7 @@ static void mpProcessGameStatePaused(mpCore &core, const float timestep, mpMemor
     core.renderer->Update(core);
 }
 
-static void mpProcessGameStateMainMenu(mpCore &core, const float timestep, mpMemoryRegion tempMemory)
+static void mpProcessGameStateMainMenu(mpCore &core, const float timestep, mpAllocator tempAllocator)
 {
     //
 }
@@ -703,12 +702,12 @@ int main(int argc, char *argv[])
     // TODO: Prepare win32 sound
     core.callbacks = PlatformGetCallbacks();
 
-    mpMemoryRegion tempMemory = mpCreateMemoryRegion(MegaBytes(100));
-    mpMemoryRegion subRegionMemory = mpCreateMemoryRegion(MegaBytes(100));
-    mpMemoryRegion vulkanMemory = mpCreateMemoryRegion(MegaBytes(10));
+    mpAllocator tempAllocator = mpCreateAllocator(MegaBytes(100));
+    mpAllocator worldDataAllocator = mpCreateAllocator(MegaBytes(100));
+    mpAllocator renderAllocator = mpCreateAllocator(MegaBytes(10));
 
     if(core.renderFlags & MP_RENDER_FLAG_REGENERATE_WORLD){
-        core.region = mpGenerateWorldData(subRegionMemory);
+        core.region = mpGenerateWorldData(worldDataAllocator);
         mpFile worldGen = {};
         worldGen.handle = core.region;
         worldGen.size = sizeof(mpVoxelRegion);
@@ -716,11 +715,13 @@ int main(int argc, char *argv[])
     }
     else{
         mpFile worldGen = core.callbacks.mpReadFile("../assets/worldGen.mpasset");
-        core.region = static_cast<mpVoxelRegion*>(worldGen.handle);
+        core.region = mpAllocate<mpVoxelRegion>(worldDataAllocator, 1);
+        memcpy(core.region, worldGen.handle, worldGen.size);
+        core.callbacks.mpFreeFileMemory(&worldGen);
     }
 
     core.meshRegistry = mpCreateMeshRegistry(500, 20);
-    mpGenerateMeshes(core.region, core.meshRegistry, tempMemory);
+    mpGenerateMeshes(core.region, core.meshRegistry, tempAllocator);
 
     // TODO: string type for asset path
     const char *textures[] = {
@@ -731,7 +732,7 @@ int main(int argc, char *argv[])
     constexpr uint32_t textureCount = arraysize(textures);
     mpRenderer renderer;
     memset(&renderer, 0, sizeof(mpRenderer));
-    renderer.LinkMemory(vulkanMemory, tempMemory);
+    renderer.LinkMemory(renderAllocator, tempAllocator);
     renderer.InitDevice(core, core.renderFlags & MP_RENDER_FLAG_ENABLE_VK_VALIDATION);
     renderer.LoadTextures(textures, textureCount);
     renderer.InitResources(core);
@@ -783,13 +784,13 @@ int main(int argc, char *argv[])
         switch (core.gameState)
         {
         case MP_GAMESTATE_ACTIVE:
-            mpProcessGameStateActive(core, timestep, tempMemory, player);
+            mpProcessGameStateActive(core, timestep, tempAllocator, player);
             break;
         case MP_GAMESTATE_PAUSED:
-            mpProcessGameStatePaused(core, timestep, tempMemory);
+            mpProcessGameStatePaused(core, timestep, tempAllocator);
             break;
         case MP_GAMESTATE_MAINMENU:
-            mpProcessGameStateMainMenu(core, timestep, tempMemory);
+            mpProcessGameStateMainMenu(core, timestep, tempAllocator);
             break;
 
         default:
@@ -797,7 +798,7 @@ int main(int argc, char *argv[])
             break;
         }
 
-        mpResetMemoryRegion(tempMemory);
+        mpResetMemoryRegion(tempAllocator);
         // Core :: Resets
         core.windowInfo.hasResized = false;
         mpEventHandlerEnd(core.eventHandler, core.screenCentre.x, core.screenCentre.y, core.windowInfo.fullscreen);
@@ -806,8 +807,8 @@ int main(int argc, char *argv[])
     }
     // General :: cleanup
     mpDestroyMeshRegistry(core.meshRegistry);
-    mpDestroyMemoryRegion(subRegionMemory);
-    mpDestroyMemoryRegion(tempMemory);
+    mpDestroyMemoryRegion(worldDataAllocator);
+    mpDestroyMemoryRegion(tempAllocator);
 
     return 0;
 }

@@ -103,7 +103,7 @@ struct mpMesh
     uint16_t *indices;
     uint32_t vertexCount;
     uint32_t indexCount;
-    mpMemoryRegion memReg;
+    mpAllocator allocator;
 };
 
 union mpVoxelColour

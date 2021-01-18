@@ -61,28 +61,33 @@ enum mpGuiValues
     MPGUI_ITEM_UNAVAILABLE = -2,
 };
 
-inline mpGUI mpGuiInitialise(uint32_t maxElementsPerTexture, uint32_t textureCount)
+mpGUI mpGuiInitialise(uint32_t maxElementsPerTexture, uint32_t textureCount)
 {
-    const size_t vertexAllocSize = sizeof(mpGuiVertex) * 4 * maxElementsPerTexture;
-    const size_t indexAllocSize = sizeof(uint16_t) * 6 * maxElementsPerTexture;
-    const size_t meshHeaderSize = sizeof(mpGuiMesh) * textureCount;
-    const size_t regionAllocSize = (vertexAllocSize + indexAllocSize) * textureCount + meshHeaderSize;
+    const uint32_t vertexAllocCount = 4 * maxElementsPerTexture;
+    const uint32_t indexAllocCount = 6 * maxElementsPerTexture;
+    const uint32_t combinedSize = sizeof(mpGuiVertex) * vertexAllocCount + sizeof(uint16_t) * indexAllocCount;
+    const uint32_t regionAllocSize = combinedSize * textureCount + meshHeaderSize;
 
     mpGUI gui = {};
     memset(&gui, 0, sizeof(mpGUI));
-    gui.memory = mpCreateMemoryRegion(regionAllocSize);
+    gui.allocator = mpCreateAllocator(regionAllocSize);
     gui.meshCount = textureCount;
-    gui.meshes = static_cast<mpGuiMesh*>(mpAlloc(gui.memory, meshHeaderSize));
+    gui.meshes = mpAllocate<mpGuiMesh>(gui.allocator, textureCount);
     for(uint32_t i = 0; i < textureCount; i++){
-        gui.meshes[i].vertices = static_cast<mpGuiVertex*>(mpAlloc(gui.memory, vertexAllocSize));
-        gui.meshes[i].indices = static_cast<uint16_t*>(mpAlloc(gui.memory, indexAllocSize));
+        gui.meshes[i].vertices = mpAllocate<mpGuiVertex>(gui.allocator, vertexAllocCount);
+        gui.meshes[i].indices = mpAllocate<uint16_t>(gui.allocator, indexAllocCount);
     }
     gui.maxElementsPerTexture = maxElementsPerTexture;
 
     return gui;
 }
 
-inline void mpGuiBegin(mpGUI &gui, mpPoint extent, mpPoint mousePos, bool32 mouseButtonDown)
+inline void mpDestroyGui(mpGUI &gui)
+{
+    mpDestroyAllocator(gui.allocator);
+}
+
+void mpGuiBegin(mpGUI &gui, mpPoint extent, mpPoint mousePos, bool32 mouseButtonDown)
 {
     for(uint32_t i = 0; i < gui.meshCount; i++){
         mpGuiMesh &mesh = gui.meshes[i];
@@ -113,7 +118,7 @@ inline static vec2 mpScreenToVertexSpace(mpPoint coords, mpPoint extent)
     return result;
 }
 // Span is valid between 0-100, where the value represents percentage of screen extent
-inline void mpDrawRect2D(mpGUI &gui, mpRect2D rect, const vec4 colour, uint32_t textureIndex = 0)
+void mpDrawRect2D(mpGUI &gui, mpRect2D rect, const vec4 colour, uint32_t textureIndex = 0)
 {
     // Converte rect2d to quad data
     const vec2 topLeft = mpScreenToVertexSpace(rect.topLeft, gui.extent);
@@ -168,7 +173,7 @@ inline bool32 mpRectHit(mpPoint mousePos, mpRect2D rect)
     return xCheck1 && xCheck2 && yCheck1 && yCheck2;
 }
 // TODO: vec4 colour -> 32 bit rgba value
-inline bool32 mpButton(mpGUI &gui, int32_t id, mpPoint centre, uint32_t textureIndex)
+bool32 mpButton(mpGUI &gui, int32_t id, mpPoint centre, uint32_t textureIndex)
 {
     constexpr mpPoint span = {10, 5};
     const mpRect2D button = mpGetAdjustedRect2D(gui.extent, centre, span);

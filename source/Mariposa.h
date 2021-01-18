@@ -23,6 +23,12 @@ struct mpVoxelQueryInfo
     mpVoxel *voxel;
     mpVoxelSubRegion *subRegion;
 };
+
+struct mpRayCastHitInfo
+{
+    mpVoxel *voxel;
+    vec3 position;
+};
 // TODO: Handle edge case when outside bounds
 inline mpVoxelQueryInfo mpQueryVoxelLocation(mpVoxelRegion &region, vec3 target)
 {
@@ -59,9 +65,3 @@ inline uint8_t mpRandomUint8()
 {
     return static_cast<uint8_t>(rand() / 500);
 }
-
-struct mpRayCastHitInfo
-{
-    mpVoxel *voxel;
-    vec3 position;
-};

@@ -59,3 +59,9 @@ inline void mpResizeAllocator(mpAllocator source, uint32_t newCount)
     source->data = realloc(source->data, newSize);
     source->maxSize = newSize;
 }
+
+inline void mpResizeAllocator(mpAllocator source, size_t newSize)
+{
+    source->data = realloc(source->data, newSize);
+    source->maxSize = newSize;
+}
