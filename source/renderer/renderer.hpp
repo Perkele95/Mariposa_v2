@@ -35,7 +35,7 @@ struct mpRenderer
     // API
     void LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion temporaryMemory);
     void InitDevice(mpCore &core, bool32 enableValidation);
-    void LoadTextures(const char *paths[], uint32_t count);
+    void LoadTextures(const char **paths, uint32_t count);
     void InitResources(mpCore &core);
     void RecreateGuiBuffers(mpGUI &gui);
     void RecreateSceneBuffer(mpMesh &mesh, uint32_t meshID);

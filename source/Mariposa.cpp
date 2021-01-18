@@ -559,13 +559,124 @@ inline static void mpPrintMemoryInfo(mpMemoryRegion region, const char *name)
     MP_LOG_INFO("%s uses %zu out of %zu kB\n", name, (region->contentSize / 1000), (region->totalSize) / 1000)
 }
 
+static void mpProcessGameStateActive(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory, mpEntity &player)
+{
+    // Core :: gamestate switch
+    if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
+        core.gameState = MP_GAMESTATE_PAUSED;
+        PlatformSetCursorVisbility(1);
+        return;
+    }
+    // CORE :: gui begin
+    const mpPoint mousePos = {core.eventHandler.mouseX, core.eventHandler.mouseY};
+    mpGuiBegin(core.gui, core.extent, mousePos, core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT);
+
+    // Core :: Centre mouse position
+    PlatformSetMousePos(core.screenCentre.x, core.screenCentre.y);
+
+    // Core :: Update camera rotation
+    if(core.eventHandler.mouseEvents & MP_MOUSE_MOVE){
+        core.camera.yaw -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaX);
+        core.camera.pitch -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaY);
+    }
+    // Core :: Restrict camera rotation
+    if(core.camera.pitch > core.camera.pitchClamp)
+        core.camera.pitch = core.camera.pitchClamp;
+    else if(core.camera.pitch < -core.camera.pitchClamp)
+        core.camera.pitch = -core.camera.pitchClamp;
+
+    mpGuiEnd(core.gui);
+    renderer.RecreateGuiBuffers(core.gui);
+    // Core :: Get camera vectors
+    const float yawCos = cosf(core.camera.yaw);
+    const float yawSin = sinf(core.camera.yaw);
+    const float pitchCos = cosf(core.camera.pitch);
+    const vec3 front = {pitchCos * yawCos, pitchCos * yawSin, sinf(core.camera.pitch)};
+    const vec3 xyFront = {yawCos, yawSin, 0.0f};
+    const vec3 left = {yawSin, -yawCos, 0.0f};
+    constexpr vec3 up = {0.0f, 0.0f, 1.0f};
+    // Core :: Update player position state
+    if(PlatformIsKeyDown('W'))
+        player.position += xyFront * core.camera.speed * timestep;
+    else if(PlatformIsKeyDown('S'))
+        player.position -= xyFront * core.camera.speed * timestep;
+    if(PlatformIsKeyDown('A'))
+        player.position -= left * core.camera.speed * timestep;
+    else if(PlatformIsKeyDown('D'))
+        player.position += left * core.camera.speed * timestep;
+    // Core :: Update camera matrices
+    core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
+    core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
+    core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
+
+    // Game events :: Physics update
+    mpEntityPhysics(*core.region, player, timestep);
+
+    // Game events :: raycasthits
+    if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT)
+        mpCreateVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
+    else if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_RIGHT)
+        mpDigVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
+
+    // Core :: Dequeue and recreate outofdate meshes
+    while(core.meshRegistry.queue.front != nullptr){
+        mpMeshQueueData queueData = mpDequeueMesh(core.meshRegistry);
+        mpSetDrawFlags(*queueData.subRegion, core.region);
+        mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
+        queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
+        renderer.RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
+    }
+    // Renderer :: Render
+    renderer.Update(core);
+}
+
+static void mpProcessGameStatePaused(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory)
+{
+    // Core :: gamestate switch
+    if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
+        core.gameState = MP_GAMESTATE_ACTIVE;
+        PlatformSetCursorVisbility(0);
+        return;
+    }
+    // CORE :: gui begin
+    const mpPoint mousePos = {core.eventHandler.mouseX, core.eventHandler.mouseY};
+    mpGuiBegin(core.gui, core.extent, mousePos, core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT);
+
+    const int32_t btnOffsetY = core.screenCentre.y / 15;
+    if(mpButton(core.gui, 0, {core.screenCentre.x, core.screenCentre.y - btnOffsetY}, 1)){
+        // -> Resume
+        core.gameState = MP_GAMESTATE_ACTIVE;
+        PlatformSetCursorVisbility(0);
+    }
+    if(mpButton(core.gui, 1, {core.screenCentre.x, core.screenCentre.y + btnOffsetY}, 2)){
+        // -> Quit
+        core.windowInfo.running = false;
+        return;
+    }
+    // Core :: gui end
+    mpGuiEnd(core.gui);
+    renderer.RecreateGuiBuffers(core.gui);
+    // Core :: camera
+    core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
+    // Renderer :: Render
+    renderer.Update(core);
+}
+
+static void mpProcessGameStateMainMenu(mpCore &core, mpRenderer &renderer, const float timestep, mpMemoryRegion tempMemory)
+{
+    //
+}
+
 int main(int argc, char *argv[])
 {
     mpCore core;
     memset(&core, 0, sizeof(mpCore));
     core.name = "Mariposa 3D Voxel Engine";
-    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION | MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
-    core.gameState = MP_GAMESTATE_ACTIVE;
+    core.renderFlags = MP_RENDER_FLAG_GENERATE_PERMUTATIONS;
+#ifdef MP_INTERNAL
+    core.renderFlags |= MP_RENDER_FLAG_ENABLE_VK_VALIDATION;
+#endif
+    core.gameState = MP_GAMESTATE_PAUSED;
 
     PlatformCreateWindow(&core.windowInfo, core.name);
     // TODO: Prepare win32 sound
@@ -632,108 +743,41 @@ int main(int argc, char *argv[])
 
     float timestep = 0.0f;
     PlatformPrepareClock();
-    PlatformSetCursorVisbility(false);
+    if(core.gameState == MP_GAMESTATE_ACTIVE)
+        PlatformSetCursorVisbility(0);
 
     core.windowInfo.running = true;
     core.windowInfo.hasResized = false; // Windows likes to set this to true at startup
     while(core.windowInfo.running)
     {
         // Core :: update constants
-        const mpPoint extent = {core.windowInfo.width, core.windowInfo.height};
-        const mpPoint screenCentre = {extent.x / 2, extent.y / 2};
+        core.extent = {core.windowInfo.width, core.windowInfo.height};
+        core.screenCentre = {core.extent.x / 2, core.extent.y / 2};
         // Core :: events
         PlatformPollEvents(core.eventHandler);
         mpEventHandlerBegin(core.eventHandler);
-        // Core :: gamestate switch
-        if(core.eventHandler.keyPressEvents & MP_KEY_EVENT_ESCAPE){
-            if(core.gameState == MP_GAMESTATE_ACTIVE){
-                core.gameState = MP_GAMESTATE_PAUSED;
-                PlatformSetCursorVisbility(1);
-            }
-            else if(core.gameState == MP_GAMESTATE_PAUSED){
-                core.gameState = MP_GAMESTATE_ACTIVE;
-                PlatformSetCursorVisbility(0);
-            }
-        }
-        // CORE :: GUI
-        const mpPoint mousePos = {core.eventHandler.mouseX, core.eventHandler.mouseY};
-        mpGuiBegin(core.gui, extent, mousePos, core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT);
 
-        if(core.gameState == MP_GAMESTATE_ACTIVE){
-            PlatformSetMousePos(screenCentre.x, screenCentre.y);
+        switch (core.gameState)
+        {
+        case MP_GAMESTATE_ACTIVE:
+            mpProcessGameStateActive(core, renderer, timestep, tempMemory, player);
+            break;
+        case MP_GAMESTATE_PAUSED:
+            mpProcessGameStatePaused(core, renderer, timestep, tempMemory);
+            break;
+        case MP_GAMESTATE_MAINMENU:
+            mpProcessGameStateMainMenu(core, renderer, timestep, tempMemory);
+            break;
 
-            // Core :: Update camera rotation
-            if(core.eventHandler.mouseEvents & MP_MOUSE_MOVE){
-                core.camera.yaw -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaX);
-                core.camera.pitch -= core.camera.sensitivity * timestep * static_cast<float>(core.eventHandler.mouseDeltaY);
-            }
-            // Core :: Restrict camera rotation
-            if(core.camera.pitch > core.camera.pitchClamp)
-                core.camera.pitch = core.camera.pitchClamp;
-            else if(core.camera.pitch < -core.camera.pitchClamp)
-                core.camera.pitch = -core.camera.pitchClamp;
-        }
-        else if(core.gameState == MP_GAMESTATE_PAUSED){
-            const int32_t btnOffsetY = screenCentre.y / 15;
-            if(mpButton(core.gui, 0, {screenCentre.x, screenCentre.y - btnOffsetY}, 1)){
-                // -> Resume
-                core.gameState = MP_GAMESTATE_ACTIVE;
-                PlatformSetCursorVisbility(0);
-            }
-            if(mpButton(core.gui, 1, {screenCentre.x, screenCentre.y + btnOffsetY}, 2)){
-                // -> Quit
-                core.windowInfo.running = false;
-                break;
-            }
+        default:
+            MP_PUTS_ERROR("CORE ERROR: invalid gamestate")
+            break;
         }
 
-        mpGuiEnd(core.gui);
-        renderer.RecreateGuiBuffers(core.gui);
-        // Core :: Get camera vectors
-        const float yawCos = cosf(core.camera.yaw);
-        const float yawSin = sinf(core.camera.yaw);
-        const float pitchCos = cosf(core.camera.pitch);
-        const vec3 front = {pitchCos * yawCos, pitchCos * yawSin, sinf(core.camera.pitch)};
-        const vec3 xyFront = {yawCos, yawSin, 0.0f};
-        const vec3 left = {yawSin, -yawCos, 0.0f};
-        constexpr vec3 up = {0.0f, 0.0f, 1.0f};
-        // Core :: Update player position state
-        if(PlatformIsKeyDown('W'))
-            player.position += xyFront * core.camera.speed * timestep;
-        else if(PlatformIsKeyDown('S'))
-            player.position -= xyFront * core.camera.speed * timestep;
-        if(PlatformIsKeyDown('A'))
-            player.position -= left * core.camera.speed * timestep;
-        else if(PlatformIsKeyDown('D'))
-            player.position += left * core.camera.speed * timestep;
-        // Core :: Update camera matrices
-        core.camera.position = {player.position.x, player.position.y, player.position.z + 8.0f};
-        core.camera.view = LookAt(core.camera.position, core.camera.position + front, up);
-        core.camera.projection = Perspective(core.camera.fov, static_cast<float>(core.windowInfo.width) / static_cast<float>(core.windowInfo.height), 0.1f, 100.0f);
-
-        // Game events :: Physics update
-        mpEntityPhysics(*core.region, player, timestep);
-
-        // Game events :: raycasthits
-        if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_LEFT)
-            mpCreateVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
-        else if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_RIGHT)
-            mpDigVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
-
-        // Core :: Dequeue and recreate outofdate meshes
-        while(core.meshRegistry.reQueue.front != nullptr){
-            mpMeshQueueData queueData = mpDequeueMesh(core.meshRegistry);
-            mpSetDrawFlags(*queueData.subRegion, core.region);
-            mpCreateMesh(*queueData.subRegion, *queueData.mesh, tempMemory);
-            queueData.subRegion->flags &= ~MP_SUBREG_FLAG_OUT_OF_DATE;
-            renderer.RecreateSceneBuffer(*queueData.mesh, queueData.subRegion->meshID);
-        }
-        // Renderer :: Render
-        renderer.Update(core);
         mpResetMemoryRegion(tempMemory);
         // Core :: Resets
         core.windowInfo.hasResized = false;
-        mpEventHandlerEnd(core.eventHandler, screenCentre.x, screenCentre.y, core.windowInfo.fullscreen);
+        mpEventHandlerEnd(core.eventHandler, core.screenCentre.x, core.screenCentre.y, core.windowInfo.fullscreen);
         MP_PROCESS_PROFILER
         timestep = PlatformUpdateClock();
     }

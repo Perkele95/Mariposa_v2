@@ -164,7 +164,7 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
     mp_assert(!error);
 }
 
-void mpRenderer::LoadTextures(const char *paths[], uint32_t count)
+void mpRenderer::LoadTextures(const char **paths, uint32_t count)
 {
     texture.count = count;
     // Allocate memory for texture images & views

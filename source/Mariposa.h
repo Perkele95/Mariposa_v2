@@ -72,8 +72,8 @@ struct mpRayCastHitInfo
 
 inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queueCapacity)
 {
-    constexpr mpMeshQueueData INIT_QUEUE_DATA = {nullptr, nullptr};
     mpMeshRegistry registry = {};
+    memset(&registry, 0, sizeof(mpMeshRegistry));
 
     // Init mesharray
     const size_t meshDataSize = meshCapacity * sizeof(mpMesh);
@@ -84,17 +84,10 @@ inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queue
 
     // Init queue
     registry.queueMemory = mpCreateMemoryRegion(queueCapacity * sizeof(mpMeshQueueItem));
-    registry.reQueue.front = nullptr;
-    registry.reQueue.rear = nullptr;
     // Init queue free list
-    registry.reQueue.freeListHead = static_cast<mpMeshQueueItem*>(mpAlloc(registry.queueMemory, queueCapacity * sizeof(mpMeshQueueItem)));
-    for(uint32_t i = 0; i < queueCapacity - 1; i++){
-        registry.reQueue.freeListHead[i].data = INIT_QUEUE_DATA;
-        registry.reQueue.freeListHead[i].next = &registry.reQueue.freeListHead[i + 1];
-    }
-    // Last element in freelist has no next element
-    registry.reQueue.freeListHead[queueCapacity - 1].data = INIT_QUEUE_DATA;
-    registry.reQueue.freeListHead[queueCapacity - 1].next = nullptr;
+    registry.queue.freeListHead = static_cast<mpMeshQueueItem*>(mpAlloc(registry.queueMemory, queueCapacity * sizeof(mpMeshQueueItem)));
+    for(uint32_t i = 0; i < queueCapacity - 1; i++)
+        registry.queue.freeListHead[i].next = &registry.queue.freeListHead[i + 1];
 
     return registry;
 }
@@ -124,7 +117,7 @@ inline void mpDeregisterMesh(mpMeshRegistry &registry, mpMesh &mesh);
 
 inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMeshQueueData &queueData)
 {
-    mpMeshQueue &queue = registry.reQueue;
+    mpMeshQueue &queue = registry.queue;
     if(queue.freeListHead == nullptr){
         // TODO: realloc
         MP_PUTS_WARN("MESHQUEUE WARNING, enqueue denied: queue full");
@@ -147,7 +140,7 @@ inline void mpEnqueueMesh(mpMeshRegistry &registry, mpMeshQueueData &queueData)
 
 inline mpMeshQueueData mpDequeueMesh(mpMeshRegistry &registry)
 {
-    mpMeshQueue &queue = registry.reQueue;
+    mpMeshQueue &queue = registry.queue;
 #ifdef MP_INTERNAL
     if(queue.front == nullptr){
         MP_PUTS_WARN("MESHQUEUE WARNING, dequeue denied: queue empty");

@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <cstring>
 #include "vulkan\vulkan.h"
-#include "mp_maths.hpp"
 #include "mp_string.hpp"
 #include "events.h"
 
@@ -25,6 +24,7 @@
 #include "logger.h"//TODO: exclude this from release mode
 #include "profiler.h"//TODO: exclude this from release mode
 #include "mpGui.h"
+#include "mp_maths.hpp"
 
 constexpr uint64_t UINT64MAX = 0xFFFFFFFFFFFFFFFF;
 constexpr float PI32 = 3.14159265359f;
@@ -138,13 +138,13 @@ struct mpVoxelRegion
 
 enum mpVoxelFlags
 {
-    MP_VOXEL_FLAG_ACTIVE      = 0x0001,
-    MP_VOXEL_FLAG_DRAW_TOP    = 0x0002,
-    MP_VOXEL_FLAG_DRAW_BOTTOM = 0x0004,
-    MP_VOXEL_FLAG_DRAW_NORTH  = 0x0008,
-    MP_VOXEL_FLAG_DRAW_SOUTH  = 0x0010,
-    MP_VOXEL_FLAG_DRAW_EAST   = 0x0020,
-    MP_VOXEL_FLAG_DRAW_WEST   = 0x0040,
+    MP_VOXEL_FLAG_DRAW_TOP    = 0x0001,
+    MP_VOXEL_FLAG_DRAW_BOTTOM = 0x0002,
+    MP_VOXEL_FLAG_DRAW_NORTH  = 0x0004,
+    MP_VOXEL_FLAG_DRAW_SOUTH  = 0x0008,
+    MP_VOXEL_FLAG_DRAW_EAST   = 0x0010,
+    MP_VOXEL_FLAG_DRAW_WEST   = 0x0020,
+    MP_VOXEL_FLAG_ACTIVE      = 0x0040,
 };
 
 enum mpSubRegionFlags
@@ -193,7 +193,6 @@ enum mpGameState
     MP_GAMESTATE_ACTIVE,
     MP_GAMESTATE_PAUSED,
     MP_GAMESTATE_MAINMENU,
-    MP_GAMESTATE_QUIT,
 };
 
 struct mpMeshQueueData
@@ -226,7 +225,7 @@ struct mpMeshRegistry
 {
     mpMeshArray meshArray;
     mpMemoryRegion meshArrayMemory;
-    mpMeshQueue reQueue;
+    mpMeshQueue queue;
     mpMemoryRegion queueMemory;
 };
 
@@ -237,6 +236,8 @@ struct mpCore
     mpCallbacks callbacks;
     mpEventHandler eventHandler;
     mpFlags gameState;
+    mpPoint extent;
+    mpPoint screenCentre;
 
     mpCamera camera;
 
