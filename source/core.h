@@ -31,9 +31,9 @@ constexpr float PI32 = 3.14159265359f;
 constexpr float PI32_D = 6.28318530718f;
 constexpr float SQRT2 = 1.41421356237f;
 
-constexpr int64_t KiloBytes(const int64_t amount) {return amount * 1024LL;}
-constexpr int64_t MegaBytes(const int64_t amount) {return amount * 1024LL * 1024LL;}
-constexpr int64_t GigaBytes(const int64_t amount) {return amount * 1024LL * 1024LL * 1024LL;}
+constexpr size_t KiloBytes(const size_t amount) {return amount * 1024LL;}
+constexpr size_t MegaBytes(const size_t amount) {return amount * 1024LL * 1024LL;}
+constexpr size_t GigaBytes(const size_t amount) {return amount * 1024LL * 1024LL * 1024LL;}
 
 #define arraysize(array) (sizeof(array) / sizeof((array)[0]))
 #define arraysize3D(array3D) (sizeof(array3D) / sizeof((array3D)[0][0][0]))
@@ -224,9 +224,9 @@ struct mpMeshArray
 struct mpMeshRegistry
 {
     mpMeshArray meshArray;
-    mpMemoryRegion meshArrayMemory;
+    mpAllocator meshAllocator;
     mpMeshQueue queue;
-    mpMemoryRegion queueMemory;
+    mpAllocator queueAllocator;
 };
 
 struct mpRenderer;

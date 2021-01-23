@@ -69,7 +69,7 @@ inline void mpEventHandlerBegin(mpEventHandler &eventHandler)
     eventHandler.mouseDeltaY = eventHandler.mouseY - eventHandler.prevMouseY;
 }
 
-inline void mpEventHandlerEnd(mpEventHandler &eventHandler, int32_t centreX, int32_t centreY, bool32 isFullscreen)
+inline void mpEventHandlerUpdateDelta(mpEventHandler &eventHandler, int32_t centreX, int32_t centreY, bool32 isFullscreen)
 {
     if(isFullscreen){
         eventHandler.prevMouseX = centreX;
@@ -79,6 +79,10 @@ inline void mpEventHandlerEnd(mpEventHandler &eventHandler, int32_t centreX, int
         eventHandler.prevMouseX = centreX - 8;
         eventHandler.prevMouseY = centreY - 31;
     }
+}
+
+inline void mpEventHandlerEnd(mpEventHandler &eventHandler)
+{
     eventHandler.keyPressEvents = 0;
     eventHandler.mouseEvents = 0;
 }

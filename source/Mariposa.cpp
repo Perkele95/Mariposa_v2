@@ -74,7 +74,7 @@ static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpAllocator 
     mpVertex *tempBlockVertIncrementer = tempBlockVertices;
 
     constexpr size_t tempIndexBlockCount = 18 * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE * MP_SUBREGION_SIZE;
-    mpVertex *tempBlockIndices = mpAllocate<uint16_t>(tempAllocator, tempIndexBlockCount);
+    uint16_t *tempBlockIndices = mpAllocate<uint16_t>(tempAllocator, tempIndexBlockCount);
     uint16_t *tempBlockIndexIncrementer = tempBlockIndices;
 
     constexpr size_t vertexCopySize = sizeof(mpVertex) * vertexStride;
@@ -164,10 +164,12 @@ static void mpCreateMesh(mpVoxelSubRegion &subRegion, mpMesh &mesh, mpAllocator 
     mesh.vertexCount = vertexCount;
     mesh.indexCount = indexCount;
     if(mesh.allocator == nullptr){
-        mesh.allocator = mpCreateMemoryRegion(verticesSize + indicesSize);
+        mesh.allocator = mpCreateAllocator(verticesSize + indicesSize);
     }
-    else if(mesh.allocator->maxSize < verticesSize + indicesSize)
-        mpResizeAllocator(mesh.allocator, verticesSize + indicesSize);
+    else if(mesh.allocator->maxSize < verticesSize + indicesSize){
+        mpDestroyAllocator(mesh.allocator);
+        mesh.allocator = mpCreateAllocator(verticesSize + indicesSize);
+    }
 
     mpResetAllocator(mesh.allocator);
     mesh.vertices = mpAllocate<mpVertex>(mesh.allocator, vertexCount);
@@ -636,6 +638,7 @@ static void mpProcessGameStateActive(mpCore &core, const float timestep, mpAlloc
     else if(core.eventHandler.mouseEvents & MP_MOUSE_CLICK_RIGHT)
         mpDigVoxelSphere(core.meshRegistry, *core.region, core.camera.position, front);
 
+    mpEventHandlerUpdateDelta(core.eventHandler, core.screenCentre.x, core.screenCentre.y, core.windowInfo.fullscreen);
     // Core :: Dequeue and recreate outofdate meshes
     while(core.meshRegistry.queue.front != nullptr){
         mpMeshQueueData queueData = mpDequeueMesh(core.meshRegistry);
@@ -798,17 +801,17 @@ int main(int argc, char *argv[])
             break;
         }
 
-        mpResetMemoryRegion(tempAllocator);
+        mpResetAllocator(tempAllocator);
         // Core :: Resets
         core.windowInfo.hasResized = false;
-        mpEventHandlerEnd(core.eventHandler, core.screenCentre.x, core.screenCentre.y, core.windowInfo.fullscreen);
+        mpEventHandlerEnd(core.eventHandler);
         MP_PROCESS_PROFILER
         timestep = PlatformUpdateClock();
     }
     // General :: cleanup
     mpDestroyMeshRegistry(core.meshRegistry);
-    mpDestroyMemoryRegion(worldDataAllocator);
-    mpDestroyMemoryRegion(tempAllocator);
+    mpDestroyAllocator(worldDataAllocator);
+    mpDestroyAllocator(tempAllocator);
 
     return 0;
 }

@@ -7,13 +7,13 @@
 struct mpAllocator_T
 {
     void *data;
-    uint32_t size;
-    uint32_t maxSize;
+    size_t size;
+    size_t maxSize;
 };
 
 typedef mpAllocator_T *mpAllocator;
 
-inline mpAllocator mpCreateAllocator(uint32_t size)
+inline mpAllocator mpCreateAllocator(size_t size)
 {
     mpAllocator allocator = static_cast<mpAllocator>(malloc(size + sizeof(mpAllocator_T)));
     allocator->data = (allocator + 1);
@@ -51,17 +51,18 @@ inline T *mpAllocate(mpAllocator allocator, uint32_t count)
     }
     return block;
 }
-
+/*
 template<typename T>
-inline void mpResizeAllocator(mpAllocator source, uint32_t newCount)
+inline void mpResizeAllocator(mpAllocator &source, uint32_t newCount)
 {
-    const size_t newSize = count * sizeof(T);
-    source->data = realloc(source->data, newSize);
+    const size_t newSize = newCount * sizeof(T);
+    source = static_cast<mpAllocator>(realloc(source, newSize));
     source->maxSize = newSize;
 }
 
-inline void mpResizeAllocator(mpAllocator source, size_t newSize)
+inline void mpResizeAllocator(mpAllocator &source, size_t newSize)
 {
-    source->data = realloc(source->data, newSize);
+    source = static_cast<mpAllocator>(realloc(source, newSize));
     source->maxSize = newSize;
 }
+*/

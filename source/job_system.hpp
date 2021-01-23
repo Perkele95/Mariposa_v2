@@ -8,16 +8,15 @@ inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queue
     memset(&registry, 0, sizeof(mpMeshRegistry));
 
     // Init mesharray
-    const size_t meshDataSize = meshCapacity * sizeof(mpMesh);
-    registry.meshArrayMemory = mpCreateMemoryRegion(meshDataSize);
-    registry.meshArray.data = static_cast<mpMesh*>(mpAlloc(registry.meshArrayMemory, meshDataSize));
+    registry.meshAllocator = mpCreateAllocator(meshCapacity * sizeof(mpMesh));
+    registry.meshArray.data = mpAllocate<mpMesh>(registry.meshAllocator, meshCapacity);
     registry.meshArray.count = 0;
     registry.meshArray.max = meshCapacity;
 
     // Init queue
-    registry.queueMemory = mpCreateMemoryRegion(queueCapacity * sizeof(mpMeshQueueItem));
+    registry.queueAllocator = mpCreateAllocator(queueCapacity * sizeof(mpMeshQueueItem));
     // Init queue free list
-    registry.queue.freeListHead = static_cast<mpMeshQueueItem*>(mpAlloc(registry.queueMemory, queueCapacity * sizeof(mpMeshQueueItem)));
+    registry.queue.freeListHead = mpAllocate<mpMeshQueueItem>(registry.queueAllocator, queueCapacity);
     for(uint32_t i = 0; i < queueCapacity - 1; i++)
         registry.queue.freeListHead[i].next = &registry.queue.freeListHead[i + 1];
 
@@ -26,17 +25,18 @@ inline mpMeshRegistry mpCreateMeshRegistry(uint32_t meshCapacity, uint32_t queue
 
 inline void mpDestroyMeshRegistry(mpMeshRegistry &registry)
 {
-    mpDestroyMemoryRegion(registry.meshArrayMemory);
-    mpDestroyMemoryRegion(registry.queueMemory);
+    mpDestroyAllocator(registry.meshAllocator);
+    mpDestroyAllocator(registry.queueAllocator);
     memset(&registry, 0, sizeof(mpMeshRegistry));
 }
 // outMeshID is not optional
 inline mpMesh &mpGetMesh(mpMeshRegistry &registry, int32_t *outMeshID)
 {
+#if 0
     if(registry.meshArray.count + 1 > registry.meshArray.max){
         registry.meshArray.max *= 2;
-        mpResizeMemory(registry.meshArrayMemory, sizeof(mpMesh) * registry.meshArray.max);
     }
+#endif
     mpMesh &result = registry.meshArray.data[registry.meshArray.count];
     *outMeshID = registry.meshArray.count;
     registry.meshArray.count++;

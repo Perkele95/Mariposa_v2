@@ -33,7 +33,7 @@ constexpr uint32_t MAX_IMAGES_IN_FLIGHT = 2;
 struct mpRenderer
 {
     // API
-    void LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion temporaryMemory);
+    void LinkMemory(mpAllocator _mainAllocator, mpAllocator _tempAllocator);
     void InitDevice(mpCore &core, bool32 enableValidation);
     void LoadTextures(const char **paths, uint32_t count);
     void InitResources(mpCore &core);
@@ -43,8 +43,8 @@ struct mpRenderer
     void Cleanup();
 private:
     // MP memory
-    mpMemoryRegion mpVkMemory;
-    mpMemoryRegion tempMemory;
+    mpAllocator mainAllocator;
+    mpAllocator tempAllocator;
     // Shared fields
     VkInstance instance;
     VkPhysicalDevice gpu;

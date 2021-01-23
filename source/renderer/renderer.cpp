@@ -4,10 +4,10 @@
 
 static bool32 IsInitalised = false;
 // public methods
-void mpRenderer::LinkMemory(mpMemoryRegion rendererMemory, mpMemoryRegion temporaryMemory)
+void mpRenderer::LinkMemory(mpAllocator _mainAllocator, mpAllocator _tempAllocator)
 {
-    mpVkMemory = rendererMemory;
-    tempMemory = temporaryMemory;
+    mainAllocator = _mainAllocator;
+    tempAllocator = _tempAllocator;
 }
 
 void mpRenderer::LoadShaders(const mpCallbacks &callbacks)
@@ -27,8 +27,7 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
     if(enableValidation){
         uint32_t layerCount = 0;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-        const size_t allocSize = sizeof(VkLayerProperties) * layerCount;
-        VkLayerProperties *availableLayers = static_cast<VkLayerProperties*>(mpAlloc(tempMemory, allocSize));
+        VkLayerProperties *availableLayers = mpAllocate<VkLayerProperties>(tempAllocator, layerCount);
         vkEnumerateInstanceLayerProperties(&layerCount, availableLayers);
 
         bool32 layerFound = false;
@@ -63,7 +62,7 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
     }
     uint32_t extensionsCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, nullptr);
-    VkExtensionProperties *extensionProperties = static_cast<VkExtensionProperties*>(mpAlloc(tempMemory, sizeof(VkExtensionProperties) * extensionsCount));
+    VkExtensionProperties *extensionProperties = mpAllocate<VkExtensionProperties>(tempAllocator, extensionsCount);
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionsCount, extensionProperties);
 
     instanceInfo.enabledExtensionCount = arraysize(requiredExtensions);
@@ -85,7 +84,7 @@ void mpRenderer::InitDevice(mpCore &core, bool32 enableValidation)
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
     mp_assert(deviceCount > 0)
-    VkPhysicalDevice *physDevices = static_cast<VkPhysicalDevice*>(mpAlloc(tempMemory, sizeof(VkPhysicalDevice) * deviceCount));
+    VkPhysicalDevice *physDevices = mpAllocate<VkPhysicalDevice>(tempAllocator, deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, physDevices);
 
     // Find suitable gpu
@@ -168,9 +167,9 @@ void mpRenderer::LoadTextures(const char **paths, uint32_t count)
 {
     texture.count = count;
     // Allocate memory for texture images & views
-    texture.pImages = static_cast<VkImage*>(mpAlloc(mpVkMemory, sizeof(VkImage) * texture.count));
-    texture.pImageViews = static_cast<VkImageView*>(mpAlloc(mpVkMemory, sizeof(VkImageView) * texture.count));
-    texture.pImageMemories = static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * texture.count));
+    texture.pImages = mpAllocate<VkImage>(mainAllocator, texture.count);
+    texture.pImageViews = mpAllocate<VkImageView>(mainAllocator, texture.count);
+    texture.pImageMemories = mpAllocate<VkDeviceMemory>(mainAllocator, texture.count);
 
     // Prepare images & views
     for(uint32_t i = 0; i < count; i++)
@@ -179,10 +178,10 @@ void mpRenderer::LoadTextures(const char **paths, uint32_t count)
         texture.pImageViews[i] = CreateImageView(texture.pImages[i], VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
     }
     // Allocate memory for texture buffers
-    texture.pVertexbuffers = static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * texture.count));
-    texture.pVertexbufferMemories = static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * texture.count));
-    texture.pIndexbuffers = static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * texture.count));
-    texture.pIndexbufferMemories = static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * texture.count));
+    texture.pVertexbuffers = mpAllocate<VkBuffer>(mainAllocator, texture.count);
+    texture.pVertexbufferMemories = mpAllocate<VkDeviceMemory>(mainAllocator, texture.count);
+    texture.pIndexbuffers = mpAllocate<VkBuffer>(mainAllocator, texture.count);
+    texture.pIndexbufferMemories = mpAllocate<VkDeviceMemory>(mainAllocator, texture.count);
 }
 
 void mpRenderer::InitResources(mpCore &core)
@@ -228,7 +227,7 @@ void mpRenderer::InitResources(mpCore &core)
     uint32_t formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, nullptr);
     mp_assert(formatCount > 0)
-    VkSurfaceFormatKHR *pSurfaceFormats = static_cast<VkSurfaceFormatKHR*>(mpAlloc(tempMemory, sizeof(VkSurfaceFormatKHR) * formatCount));
+    VkSurfaceFormatKHR *pSurfaceFormats = mpAllocate<VkSurfaceFormatKHR>(tempAllocator, formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &formatCount, pSurfaceFormats);
 
     surfaceFormat = pSurfaceFormats[0];
@@ -243,7 +242,7 @@ void mpRenderer::InitResources(mpCore &core)
     uint32_t presentModeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &presentModeCount, nullptr);
     mp_assert(presentModeCount > 0)
-    VkPresentModeKHR *pPresentModes = static_cast<VkPresentModeKHR*>(mpAlloc(tempMemory, sizeof(VkSurfaceFormatKHR) * presentModeCount));
+    VkPresentModeKHR *pPresentModes = mpAllocate<VkPresentModeKHR>(tempAllocator, presentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &presentModeCount, pPresentModes);
     /* NOTE:
         VK_PRESENT_MODE_IMMEDIATE_KHR   == Vsync OFF
@@ -318,10 +317,10 @@ void mpRenderer::InitResources(mpCore &core)
     mp_assert(!error)
 
     vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
-    pSwapchainImages = static_cast<VkImage*>(mpAlloc(mpVkMemory, sizeof(VkImage) * swapchainImageCount));
+    pSwapchainImages = mpAllocate<VkImage>(mainAllocator, swapchainImageCount);
     vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, pSwapchainImages);
 
-    pSwapchainImageViews = static_cast<VkImageView*>(mpAlloc(mpVkMemory, sizeof(VkImageView) * swapchainImageCount));
+    pSwapchainImageViews = mpAllocate<VkImageView>(mainAllocator, swapchainImageCount);
     for(uint32_t i = 0; i < swapchainImageCount; i++)
         pSwapchainImageViews[i] = CreateImageView(pSwapchainImages[i], swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -336,18 +335,18 @@ void mpRenderer::InitResources(mpCore &core)
     PrepareGuiPipeline();
 
     // Vulkan :: Allocate dynamic arrays
-    pFramebuffers =          static_cast<VkFramebuffer*>(  mpAlloc(mpVkMemory, sizeof(VkFramebuffer) * swapchainImageCount));
-    pUniformbuffers =        static_cast<VkBuffer*>(       mpAlloc(mpVkMemory, sizeof(VkBuffer) * swapchainImageCount));
-    pUniformbufferMemories = static_cast<VkDeviceMemory*>( mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * swapchainImageCount));
-    pCommandbuffers =        static_cast<VkCommandBuffer*>(mpAlloc(mpVkMemory, sizeof(VkCommandBuffer) * swapchainImageCount));
-    pInFlightImageFences =   static_cast<VkFence*>(        mpAlloc(mpVkMemory, sizeof(VkFence) * swapchainImageCount));
-    scene.pDescriptorSets =  static_cast<VkDescriptorSet*>(mpAlloc(mpVkMemory, sizeof(VkDescriptorSet) * swapchainImageCount));
-    gui.pDescriptorSets =    static_cast<VkDescriptorSet*>(mpAlloc(mpVkMemory, sizeof(VkDescriptorSet) * swapchainImageCount));
+    pFramebuffers = mpAllocate<VkFramebuffer>(mainAllocator, swapchainImageCount);
+    pUniformbuffers = mpAllocate<VkBuffer>(mainAllocator, swapchainImageCount);
+    pUniformbufferMemories = mpAllocate<VkDeviceMemory>(mainAllocator, swapchainImageCount);
+    pCommandbuffers = mpAllocate<VkCommandBuffer>(mainAllocator, swapchainImageCount);
+    pInFlightImageFences = mpAllocate<VkFence>(mainAllocator, swapchainImageCount);
+    scene.pDescriptorSets = mpAllocate<VkDescriptorSet>(mainAllocator, swapchainImageCount);
+    gui.pDescriptorSets = mpAllocate<VkDescriptorSet>(mainAllocator, swapchainImageCount);
 
-    scene.vertexbuffers =    static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * core.meshRegistry.meshArray.count));
-    scene.vertexbufferMemories =    static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * core.meshRegistry.meshArray.count));
-    scene.indexbuffers =    static_cast<VkBuffer*>(mpAlloc(mpVkMemory, sizeof(VkBuffer) * core.meshRegistry.meshArray.count));
-    scene.indexbufferMemories =    static_cast<VkDeviceMemory*>(mpAlloc(mpVkMemory, sizeof(VkDeviceMemory) * core.meshRegistry.meshArray.count));
+    scene.vertexbuffers = mpAllocate<VkBuffer>(mainAllocator, core.meshRegistry.meshArray.count);
+    scene.vertexbufferMemories = mpAllocate<VkDeviceMemory>(mainAllocator, core.meshRegistry.meshArray.count);
+    scene.indexbuffers = mpAllocate<VkBuffer>(mainAllocator, core.meshRegistry.meshArray.count);
+    scene.indexbufferMemories = mpAllocate<VkDeviceMemory>(mainAllocator, core.meshRegistry.meshArray.count);
     scene.bufferCount = core.meshRegistry.meshArray.count;
 
     // Vulkan :: depth resources
@@ -711,7 +710,7 @@ bool32 mpRenderer::CheckPhysicalDeviceSuitability(VkPhysicalDevice &checkedPhysD
 {
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(checkedPhysDevice, &queueFamilyCount, nullptr);
-    VkQueueFamilyProperties* queueFamilyProperties = static_cast<VkQueueFamilyProperties*>(mpAlloc(tempMemory, sizeof(VkQueueFamilyProperties) * queueFamilyCount));
+    VkQueueFamilyProperties* queueFamilyProperties = mpAllocate<VkQueueFamilyProperties>(tempAllocator, queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(checkedPhysDevice, &queueFamilyCount, queueFamilyProperties);
 
     bool32 hasGraphicsFamily = false, hasPresentFamily = false;
@@ -731,7 +730,7 @@ bool32 mpRenderer::CheckPhysicalDeviceSuitability(VkPhysicalDevice &checkedPhysD
 
     uint32_t extensionCount = 0;
     vkEnumerateDeviceExtensionProperties(checkedPhysDevice, nullptr, &extensionCount, nullptr);
-    VkExtensionProperties* availableExtensions = static_cast<VkExtensionProperties*>(mpAlloc(tempMemory, sizeof(VkExtensionProperties) * extensionCount));
+    VkExtensionProperties* availableExtensions = mpAllocate<VkExtensionProperties>(tempAllocator, extensionCount);
     vkEnumerateDeviceExtensionProperties(checkedPhysDevice, nullptr, &extensionCount, availableExtensions);
 
     bool32 extensionsSupported = false;
@@ -1299,7 +1298,7 @@ void mpRenderer::PrepareDescriptorPool()
 
 void mpRenderer::PrepareSceneDescriptorSets()
 {
-    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(mpAlloc(tempMemory, sizeof(VkDescriptorSetLayout) * swapchainImageCount));
+    VkDescriptorSetLayout *pLayouts = mpAllocate<VkDescriptorSetLayout>(tempAllocator, swapchainImageCount);
     for(uint32_t i = 0; i < swapchainImageCount; i++)
         pLayouts[i] = scene.descriptorSetLayout;
 
@@ -1331,7 +1330,7 @@ void mpRenderer::PrepareSceneDescriptorSets()
 
 void mpRenderer::PrepareGuiDescriptorSets()
 {
-    VkDescriptorSetLayout *pLayouts = static_cast<VkDescriptorSetLayout*>(mpAlloc(tempMemory, sizeof(VkDescriptorSetLayout) * swapchainImageCount));
+    VkDescriptorSetLayout *pLayouts = mpAllocate<VkDescriptorSetLayout>(tempAllocator, swapchainImageCount);
     for(uint32_t i = 0; i < swapchainImageCount; i++)
         pLayouts[i] = gui.descriptorSetLayout;
 
@@ -1345,7 +1344,7 @@ void mpRenderer::PrepareGuiDescriptorSets()
     mp_assert(!error);
 
     // Per texture
-    VkDescriptorImageInfo *imageInfos = static_cast<VkDescriptorImageInfo*>(mpAlloc(tempMemory, sizeof(VkDescriptorImageInfo) * texture.count));
+    VkDescriptorImageInfo *imageInfos = mpAllocate<VkDescriptorImageInfo>(tempAllocator, texture.count);
     for(uint32_t i = 0; i < texture.count; i++){
         imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageInfos[i].sampler = texture.sampler;
